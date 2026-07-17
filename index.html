@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JNE DataOps Dashboard | Achmad Taufik</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PapaParse for Fast CSV Processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- SheetJS for Excel Processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { jne: { blue: '#004A94', red: '#E31E24', light: '#F0F4F8' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Fixed Dashboard Styling */
+        body { margin: 0; overflow: hidden; background-color: #F0F4F8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="flex h-screen text-gray-800">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-jne-blue text-white flex flex-col shadow-xl z-20">
+        <div class="p-6 border-b border-blue-800 text-center">
+            <h1 class="text-2xl font-bold tracking-wider"><span class="text-jne-red">DATA</span>OPS</h1>
+            <p class="text-xs text-blue-200 mt-1">Enterprise Data Engineering</p>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <button onclick="switchTab('splitter')" id="btn-splitter" class="w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
+                <i class="fas fa-cut w-6"></i> Data Splitter
+            </button>
+            <button onclick="switchTab('merger')" id="btn-merger" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-object-group w-6"></i> Data Merger
+            </button>
+            <button onclick="switchTab('about')" id="btn-about" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-book w-6"></i> Panduan & About
+            </button>
+            <button onclick="switchTab('profile')" id="btn-profile" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-user-tie w-6"></i> Profil Kreator
+            </button>
+        </nav>
+        <div class="p-4 border-t border-blue-800 text-xs text-center text-blue-300">
+            &copy; 2026 Achmad Taufik
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA (Fixed Size, Scrollable Inner) -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-jne-light relative">
+        
+        <!-- HEADER -->
+        <header class="bg-white shadow-sm h-16 flex items-center px-8 justify-between z-10">
+            <h2 class="text-xl font-semibold text-gray-700" id="header-title">Data Splitter (Auto Kategorisasi)</h2>
+            <div class="flex items-center space-x-4">
+                <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200 shadow-sm"><i class="fas fa-check-circle"></i> QC Passed</span>
+            </div>
+        </header>
+
+        <!-- SCROLLABLE CONTENT -->
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            
+            <!-- TAB: SPLITTER -->
+            <div id="tab-splitter" class="tab-content active max-w-4xl mx-auto">
+                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-bold text-jne-blue border-b pb-2"><i class="fas fa-file-export"></i> Split Data (Open, Closed, Claim)</h3>
+                        <p class="text-sm text-gray-500 mt-2">Pisahkan ratusan file Excel/CSV skala besar. File &gt; 500MB akan otomatis dipotong menjadi beberapa bagian (Part 1, Part 2).</p>
+                    </div>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-10 text-center hover:border-jne-blue transition bg-gray-50">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                        <br>
+                        <input type="file" id="split-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('split-files', 'split-label')">
+                        <label for="split-files" class="bg-jne-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih File CSV / Excel</label>
+                        <p id="split-label" class="mt-3 text-sm text-gray-500">Belum ada file yang dipilih</p>
+                    </div>
+                    <button onclick="startSplit()" id="btn-run-split" class="mt-6 w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition flex items-center justify-center">
+                        <i class="fas fa-play mr-2"></i> Eksekusi Pemisahan Data
+                    </button>
+                    <!-- Progress Bar -->
+                    <div id="split-progress-container" class="mt-6 hidden">
+                        <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
+                            <span id="split-status">Memproses file...</span>
+                            <span id="split-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div id="split-progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: MERGER -->
+            <div id="tab-merger" class="tab-content max-w-4xl mx-auto">
+                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+                    <div class="mb-6">
+                        <h3 class="text-lg font-bold text-jne-blue border-b pb-2"><i class="fas fa-compress-arrows-alt"></i> Penggabung Data Cepat (Merger)</h3>
+                        <p class="text-sm text-gray-500 mt-2">Gabungkan ratusan file CSV/XLSX menjadi satu. Jika output &gt; 500MB, sistem otomatis membuat file Part_2, dst.</p>
+                    </div>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-10 text-center hover:border-jne-blue transition bg-gray-50">
+                        <input type="file" id="merge-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('merge-files', 'merge-label')">
+                        <label for="merge-files" class="bg-jne-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih File yang Ingin Digabung</label>
+                        <p id="merge-label" class="mt-3 text-sm text-gray-500">Belum ada file yang dipilih</p>
+                    </div>
+                    
+                    <div class="mt-4 flex space-x-4">
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
+                            <select id="merge-format" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                                <option value="csv">CSV (Sangat disarankan untuk data besar)</option>
+                                <option value="xlsx">Excel / XLSX (Batas 1 Juta Baris)</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Nama File Output:</label>
+                            <input type="text" id="merge-filename" value="Data_Gabungan" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                        </div>
+                    </div>
+
+                    <button onclick="startMerge()" id="btn-run-merge" class="mt-6 w-full bg-jne-red text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition flex items-center justify-center">
+                        <i class="fas fa-link mr-2"></i> Gabungkan File
+                    </button>
+                    <!-- Progress Bar -->
+                    <div id="merge-progress-container" class="mt-6 hidden">
+                        <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
+                            <span id="merge-status">Menggabungkan data...</span>
+                            <span id="merge-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div id="merge-progress-bar" class="bg-red-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: ABOUT -->
+            <div id="tab-about" class="tab-content max-w-4xl mx-auto">
+                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
+                    <h3 class="text-2xl font-bold text-jne-blue border-b pb-2">Panduan Penggunaan</h3>
+                    
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-cut text-jne-blue mr-2"></i> 1. Fitur Data Splitter</h4>
+                        <ul class="list-disc pl-6 text-gray-600 mt-2 space-y-1 text-sm">
+                            <li>Berfungsi memisahkan ratusan file laporan operasional berdasarkan kolom <b>CODING</b>.</li>
+                            <li>Mapping Kategori: File otomatis terpisah menjadi <b>Open.csv</b>, <b>Closed.csv</b>, dan <b>Claim.csv</b> berdasarkan standarisasi kode perusahaan.</li>
+                            <li><b>Blank Handling:</b> Jika sel pada kolom CODING kosong, berisi spasi *invisible*, atau <i>null/NaN</i>, sistem otomatis membacanya sebagai "BLANK" dan memasukkannya ke file Open.</li>
+                            <li><b>Auto-Chunking 500MB:</b> Untuk mencegah Excel nge-<i>lag</i> saat dibuka, jika hasil pemisahan menembus ukuran 500MB, web akan memotongnya menjadi Open_1, Open_2, dst.</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-object-group text-jne-red mr-2"></i> 2. Fitur Data Merger</h4>
+                        <ul class="list-disc pl-6 text-gray-600 mt-2 space-y-1 text-sm">
+                            <li>Berfungsi menumpuk/menggabungkan ratusan file *report* CSV/Excel menjadi satu file utuh.</li>
+                            <li>Memiliki *engine* asinkron sehingga tidak menyebabkan browser *freeze*.</li>
+                            <li>Jika hasil gabungan melebihi 500MB, file akan terpecah ke dalam beberapa *part*. Disarankan menggunakan format output CSV untuk stabilitas.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-blue-50 p-4 rounded border-l-4 border-blue-500 text-sm text-blue-800">
+                        <b>Privasi & Keamanan:</b> Aplikasi Web ini 100% berjalan di atas RAM *Local-Client* komputer Anda. Tidak ada satupun file operasional rahasia perusahaan yang di-upload ke internet atau server luar.
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: PROFILE -->
+            <div id="tab-profile" class="tab-content max-w-3xl mx-auto">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
+                    <div class="bg-gradient-to-r from-jne-blue to-blue-900 h-32 relative"></div>
+                    <div class="px-8 pb-8 flex flex-col items-center -mt-16 relative z-10">
+                        <!-- Avatar Placeholder -->
+                        <div class="w-32 h-32 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center text-5xl text-blue-800 overflow-hidden">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <h2 class="text-3xl font-bold text-gray-800 mt-4">Achmad Taufik</h2>
+                        <p class="text-blue-600 font-semibold tracking-wide">Data Engineer & System Analyst</p>
+                        
+                        <div class="w-full mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <a href="mailto:atte.achmad@gmail.com" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fas fa-envelope text-2xl text-blue-600 mb-2"></i>
+                                <span class="text-sm font-bold text-gray-700">Email Pribadi</span>
+                                <span class="text-xs text-gray-500 break-all text-center">atte.achmad@gmail.com</span>
+                            </a>
+                            <a href="mailto:achmad.taufik@jne.co.id" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fas fa-briefcase text-2xl text-jne-blue mb-2"></i>
+                                <span class="text-sm font-bold text-gray-700">Email Corporate</span>
+                                <span class="text-xs text-gray-500 break-all text-center">achmad.taufik@jne.co.id</span>
+                            </a>
+                            <a href="https://wa.me/6285779300030" target="_blank" class="flex flex-col items-center p-4 bg-green-50 rounded-lg border border-green-200 hover:border-green-400 hover:shadow-md transition">
+                                <i class="fab fa-whatsapp text-2xl text-green-600 mb-2"></i>
+                                <span class="text-sm font-bold text-gray-700">WhatsApp</span>
+                                <span class="text-xs text-gray-500">085779300030</span>
+                            </a>
+                        </div>
+                        <p class="text-center text-sm text-gray-500 mt-8 max-w-lg">
+                            Dedicated to automating enterprise data pipelines, ensuring data integrity, and designing intuitive user interfaces for operational excellence.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- MAIN LOGIC (JavaScript) -->
+    <script>
+        // --- 1. UI LOGIC ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('aside nav button').forEach(el => {
+                el.classList.remove('bg-blue-800', 'text-white');
+                el.classList.add('text-blue-100');
+            });
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('btn-' + tabId).classList.remove('text-blue-100');
+            document.getElementById('btn-' + tabId).classList.add('bg-blue-800', 'text-white');
+            
+            const titles = {
+                'splitter': 'Data Splitter (Auto Kategorisasi)',
+                'merger': 'Data Merger (Penggabung Cepat)',
+                'about': 'Panduan Penggunaan',
+                'profile': 'Profil Kreator'
+            };
+            document.getElementById('header-title').innerText = titles[tabId];
+        }
+
+        function updateFileLabel(inputId, labelId) {
+            const files = document.getElementById(inputId).files;
+            const label = document.getElementById(labelId);
+            if (files.length === 0) label.innerText = "Belum ada file yang dipilih";
+            else if (files.length === 1) label.innerText = files[0].name;
+            else label.innerText = `${files.length} file dipilih`;
+        }
+
+        // Konstanta Ukuran (500MB)
+        const MAX_MB = 500;
+        const MAX_BYTES = MAX_MB * 1024 * 1024;
+
+        // Fungsi Trigger Download
+        function downloadCSVString(csvString, filename) {
+            const blob = new Blob(["\ufeff" + csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- 2. DATA SPLITTER LOGIC ---
+        const statusMapping = {
+            'BY': 'Open', 'CR1': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'D26': 'Open', 'BLANK': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'R24': 'Open', 'R25': 'Open', 'PS1': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS4': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'UF': 'Open', 'R37': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'D30': 'Open', 'U37': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'CR4': 'Open', 'CR7': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'DP5': 'Open', 'CR8': 'Open', 'IP3': 'Open',
+            'D01': 'Closed', 'D02': 'Closed', 'D03': 'Closed', 'D04': 'Closed', 'D05': 'Closed', 'D06': 'Closed', 'D07': 'Closed', 'D08': 'Closed', 'D09': 'Closed', 'D10': 'Closed', 'D11': 'Closed', 'D12': 'Closed', 'D15': 'Closed', 'D16': 'Closed', 'DB1': 'Closed', 'DB2': 'Closed', 'R01': 'Closed', 'R02': 'Closed', 'R03': 'Closed', 'R04': 'Closed', 'R05': 'Closed', 'R06': 'Closed', 'R07': 'Closed', 'R08': 'Closed', 'R09': 'Closed', 'R10': 'Closed', 'R11': 'Closed', 'R12': 'Closed', 'R13': 'Closed', 'R26': 'Closed', 'D1': 'Closed',
+            'U14': 'Claim', 'C05': 'Claim', 'D24': 'Claim', 'D25': 'Claim', 'D37': 'Claim', 'C01': 'Claim'
+        };
+
+        async function startSplit() {
+            const files = document.getElementById('split-files').files;
+            if (files.length === 0) return alert('Silakan pilih file terlebih dahulu!');
+            
+            // Setup UI Progress
+            const btn = document.getElementById('btn-run-split');
+            const progCont = document.getElementById('split-progress-container');
+            const progBar = document.getElementById('split-progress-bar');
+            const progStatus = document.getElementById('split-status');
+            const progPct = document.getElementById('split-percent');
+            
+            btn.disabled = true; btn.classList.add('opacity-50');
+            progCont.classList.remove('hidden');
+            
+            // Memory states
+            let outBuffers = { 'Open': '', 'Closed': '', 'Claim': '' };
+            let fileCounters = { 'Open': 1, 'Closed': 1, 'Claim': 1 };
+            let byteSizes = { 'Open': 0, 'Closed': 0, 'Claim': 0 };
+            let headerString = "";
+
+            for(let i = 0; i < files.length; i++) {
+                const file = files[i];
+                progStatus.innerText = `Memproses: ${file.name} (${i+1}/${files.length})`;
+                
+                await new Promise((resolve) => {
+                    let isFirstRow = true;
+                    let codingIndex = -1;
+
+                    Papa.parse(file, {
+                        header: false,
+                        skipEmptyLines: true,
+                        chunkSize: 1024 * 1024 * 5, // 5MB Chunk per stream
+                        chunk: function(results, parser) {
+                            let rows = results.data;
+                            if (isFirstRow && rows.length > 0) {
+                                // Cari index kolom "CODING"
+                                const headers = rows[0].map(h => String(h).trim().toUpperCase());
+                                codingIndex = headers.indexOf('CODING');
+                                if (codingIndex === -1) {
+                                    alert(`Kolom 'CODING' tidak ditemukan di file ${file.name}`);
+                                    parser.abort();
+                                    return;
+                                }
+                                headerString = Papa.unparse([rows[0]]) + "\n";
+                                
+                                // Inisiasi Header jika belum ada
+                                ['Open', 'Closed', 'Claim'].forEach(cat => {
+                                    if(outBuffers[cat] === '') {
+                                        outBuffers[cat] = headerString;
+                                        byteSizes[cat] += new Blob([headerString]).size;
+                                    }
+                                });
+                                rows.shift(); // Buang header dari array data
+                                isFirstRow = false;
+                            }
+
+                            // Proses per baris
+                            let tempOpen = [], tempClosed = [], tempClaim = [];
+                            rows.forEach(row => {
+                                let code = row[codingIndex];
+                                // Handling Blank
+                                if(code === null || code === undefined || code === '') code = 'BLANK';
+                                code = String(code).trim().toUpperCase();
+                                if(['NAN', 'NULL', '<NA>'].includes(code)) code = 'BLANK';
+
+                                const status = statusMapping[code];
+                                
+                                if(status === 'Open') tempOpen.push(row);
+                                else if(status === 'Closed') tempClosed.push(row);
+                                else if(status === 'Claim') tempClaim.push(row);
+                            });
+
+                            // Konversi ke string dan tambahkan ke buffer
+                            const appendData = (category, dataArr) => {
+                                if(dataArr.length > 0) {
+                                    let str = Papa.unparse(dataArr) + "\n";
+                                    outBuffers[category] += str;
+                                    byteSizes[category] += new Blob([str]).size;
+                                    
+                                    // Cek limit 500MB
+                                    if(byteSizes[category] >= MAX_BYTES) {
+                                        downloadCSVString(outBuffers[category], `${category}_Part${fileCounters[category]}.csv`);
+                                        fileCounters[category]++;
+                                        // Reset memory
+                                        outBuffers[category] = headerString;
+                                        byteSizes[category] = new Blob([headerString]).size;
+                                    }
+                                }
+                            };
+
+                            appendData('Open', tempOpen);
+                            appendData('Closed', tempClosed);
+                            appendData('Claim', tempClaim);
+                        },
+                        complete: function() { resolve(); }
+                    });
+                });
+                
+                // Update progres UI per file
+                let pct = Math.round(((i + 1) / files.length) * 100);
+                progBar.style.width = `${pct}%`;
+                progPct.innerText = `${pct}%`;
+            }
+
+            // Download sisa buffer yang belum tersimpan
+            ['Open', 'Closed', 'Claim'].forEach(cat => {
+                if(outBuffers[cat] !== headerString && outBuffers[cat] !== '') {
+                    let fname = fileCounters[cat] > 1 ? `${cat}_Part${fileCounters[cat]}.csv` : `${cat}.csv`;
+                    downloadCSVString(outBuffers[cat], fname);
+                }
+            });
+
+            progStatus.innerText = "Selesai!";
+            btn.disabled = false; btn.classList.remove('opacity-50');
+            alert('Proses Split selesai. File akan otomatis terdownload.');
+        }
+
+        // --- 3. DATA MERGER LOGIC ---
+        async function startMerge() {
+            const files = document.getElementById('merge-files').files;
+            if (files.length === 0) return alert('Pilih file untuk digabung!');
+            const outFormat = document.getElementById('merge-format').value;
+            const baseName = document.getElementById('merge-filename').value || 'Gabungan';
+
+            const btn = document.getElementById('btn-run-merge');
+            const progCont = document.getElementById('merge-progress-container');
+            const progBar = document.getElementById('merge-progress-bar');
+            const progStatus = document.getElementById('merge-status');
+            const progPct = document.getElementById('merge-percent');
+            
+            btn.disabled = true; btn.classList.add('opacity-50');
+            progCont.classList.remove('hidden');
+
+            let bufferString = "";
+            let byteSize = 0;
+            let partCounter = 1;
+            let headerWritten = false;
+            let xlsxRows = []; // Khusus output Excel
+
+            for(let i = 0; i < files.length; i++) {
+                const file = files[i];
+                progStatus.innerText = `Menumpuk: ${file.name} (${i+1}/${files.length})`;
+                
+                await new Promise((resolve) => {
+                    let isFirstRow = true;
+                    Papa.parse(file, {
+                        header: false,
+                        skipEmptyLines: true,
+                        chunkSize: 1024 * 1024 * 5,
+                        chunk: function(results) {
+                            let rows = results.data;
+                            if(rows.length === 0) return;
+                            
+                            // Handling header agar tidak dobel
+                            if (isFirstRow) {
+                                if (headerWritten) {
+                                    rows.shift(); // Buang header jika sudah pernah ditulis
+                                } else {
+                                    headerWritten = true;
+                                }
+                                isFirstRow = false;
+                            }
+
+                            if(outFormat === 'csv') {
+                                let str = Papa.unparse(rows) + "\n";
+                                bufferString += str;
+                                byteSize += new Blob([str]).size;
+
+                                if(byteSize >= MAX_BYTES) {
+                                    downloadCSVString(bufferString, `${baseName}_Part${partCounter}.csv`);
+                                    partCounter++;
+                                    bufferString = ""; // Reset tanpa header (karena part lanjutan, opsional)
+                                    byteSize = 0;
+                                }
+                            } else {
+                                xlsxRows = xlsxRows.concat(rows);
+                                // Excel limit ~1 juta baris. Amankan di 900.000
+                                if(xlsxRows.length > 900000) {
+                                    let ws = XLSX.utils.aoa_to_sheet(xlsxRows);
+                                    let wb = XLSX.utils.book_new();
+                                    XLSX.utils.book_append_sheet(wb, ws, "Data");
+                                    XLSX.writeFile(wb, `${baseName}_Part${partCounter}.xlsx`);
+                                    partCounter++;
+                                    xlsxRows = [];
+                                }
+                            }
+                        },
+                        complete: function() { resolve(); }
+                    });
+                });
+
+                let pct = Math.round(((i + 1) / files.length) * 100);
+                progBar.style.width = `${pct}%`;
+                progPct.innerText = `${pct}%`;
+            }
+
+            // Download sisa
+            if (outFormat === 'csv' && bufferString !== "") {
+                let fname = partCounter > 1 ? `${baseName}_Part${partCounter}.csv` : `${baseName}.csv`;
+                downloadCSVString(bufferString, fname);
+            } else if (outFormat === 'xlsx' && xlsxRows.length > 0) {
+                let fname = partCounter > 1 ? `${baseName}_Part${partCounter}.xlsx` : `${baseName}.xlsx`;
+                let ws = XLSX.utils.aoa_to_sheet(xlsxRows);
+                let wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Data");
+                XLSX.writeFile(wb, fname);
+            }
+
+            progStatus.innerText = "Selesai digabung!";
+            btn.disabled = false; btn.classList.remove('opacity-50');
+            alert('Proses Merge selesai!');
+        }
+    </script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JNE DataOps Dashboard | Achmad Taufik</title>
+    <title>nadi Nadi_X-Bot Dashboard | Achmad Taufik</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -12,7 +12,7 @@
     <script>
         tailwind.config = {
             theme: {
-                extend: { colors: { jne: { blue: '#004A94', red: '#E31E24', light: '#F0F4F8' } } }
+                extend: { colors: { nadi: { blue: '#004A94', red: '#E31E24', light: '#F0F4F8' } } }
             }
         }
     </script>
@@ -33,9 +33,9 @@
 <body class="flex h-screen text-gray-800">
 
     <!-- SIDEBAR -->
-    <aside class="w-64 bg-jne-blue text-white flex flex-col shadow-xl z-20">
+    <aside class="w-64 bg-nadi-blue text-white flex flex-col shadow-xl z-20">
         <div class="p-6 border-b border-blue-800 text-center">
-            <h1 class="text-2xl font-bold tracking-wider"><span class="text-jne-red">DATA</span>OPS</h1>
+            <h1 class="text-2xl font-bold tracking-wider"><span class="text-nadi-red">Nadi</span>X-Bot</h1>
             <p class="text-xs text-blue-200 mt-1">Enterprise Data Engineering</p>
         </div>
         <nav class="flex-1 p-4 space-y-2">
@@ -61,7 +61,7 @@
     </aside>
 
     <!-- MAIN CONTENT AREA -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-jne-light relative">
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-nadi-light relative">
         
         <!-- HEADER -->
         <header class="bg-white shadow-sm h-16 flex items-center px-8 justify-between z-10">
@@ -80,7 +80,7 @@
             <div id="tab-splitter" class="tab-content active max-w-4xl mx-auto">
                 <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
-                        <h3 class="text-lg font-bold text-jne-blue border-b pb-2"><i class="fas fa-file-export"></i> Split Data (Open, Closed, Claim)</h3>
+                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-file-export"></i> Split Data (Open, Closed, Claim)</h3>
                         <p class="text-sm text-gray-500 mt-2">Pisahkan file berdasarkan Kolom CODING. Tarik file ke kotak di bawah atau klik untuk memilih.</p>
                     </div>
                     
@@ -89,13 +89,13 @@
                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                         <br>
                         <input type="file" id="split-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('split-files', 'split-label')">
-                        <label for="split-files" class="bg-jne-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik File Kesini</label>
+                        <label for="split-files" class="bg-nadi-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik File Kesini</label>
                         <p id="split-label" class="mt-3 text-sm font-bold text-gray-600">Belum ada file yang dipilih</p>
                     </div>
 
                     <div class="mt-4">
                         <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
-                        <select id="split-format" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                        <select id="split-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                             <option value="csv">CSV (Sangat disarankan untuk data besar)</option>
                             <option value="xlsx">Excel / XLSX</option>
                         </select>
@@ -121,25 +121,25 @@
             <div id="tab-rowsplitter" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
-                        <h3 class="text-lg font-bold text-jne-blue border-b pb-2"><i class="fas fa-layer-group"></i> Split Data by Rows</h3>
+                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-layer-group"></i> Split Data by Rows</h3>
                         <p class="text-sm text-gray-500 mt-2">Pecah 1 file besar menjadi beberapa file kecil berdasarkan jumlah baris secara otomatis.</p>
                     </div>
                     
                     <!-- Drag & Drop Zone -->
                     <div id="dropzone-row" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-10 text-center bg-gray-50 cursor-pointer">
                         <input type="file" id="row-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('row-files', 'row-label')">
-                        <label for="row-files" class="bg-jne-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik File Kesini</label>
+                        <label for="row-files" class="bg-nadi-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik File Kesini</label>
                         <p id="row-label" class="mt-3 text-sm font-bold text-gray-600">Belum ada file yang dipilih</p>
                     </div>
                     
                     <div class="mt-4 flex space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Potong per berapa baris?</label>
-                            <input type="number" id="row-limit" value="20000" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                            <input type="number" id="row-limit" value="20000" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                         </div>
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
-                            <select id="row-format" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                            <select id="row-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                                 <option value="csv">CSV</option>
                                 <option value="xlsx">Excel / XLSX</option>
                             </select>
@@ -166,32 +166,32 @@
             <div id="tab-merger" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
-                        <h3 class="text-lg font-bold text-jne-blue border-b pb-2"><i class="fas fa-compress-arrows-alt"></i> Penggabung Data (Merger)</h3>
+                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-compress-arrows-alt"></i> Penggabung Data (Merger)</h3>
                         <p class="text-sm text-gray-500 mt-2">Gabungkan ratusan file CSV/XLSX menjadi satu file utuh.</p>
                     </div>
                     
                     <!-- Drag & Drop Zone -->
                     <div id="dropzone-merge" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-10 text-center bg-gray-50 cursor-pointer">
                         <input type="file" id="merge-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('merge-files', 'merge-label')">
-                        <label for="merge-files" class="bg-jne-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik Banyak File Kesini</label>
+                        <label for="merge-files" class="bg-nadi-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik Banyak File Kesini</label>
                         <p id="merge-label" class="mt-3 text-sm font-bold text-gray-600">Belum ada file yang dipilih</p>
                     </div>
                     
                     <div class="mt-4 flex space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
-                            <select id="merge-format" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                            <select id="merge-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                                 <option value="csv">CSV (Disarankan untuk data besar)</option>
                                 <option value="xlsx">Excel / XLSX</option>
                             </select>
                         </div>
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Nama File Output:</label>
-                            <input type="text" id="merge-filename" value="Data_Gabungan" class="w-full p-2 border border-gray-300 rounded focus:ring-jne-blue focus:border-jne-blue">
+                            <input type="text" id="merge-filename" value="Data_Gabungan" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                         </div>
                     </div>
 
-                    <button onclick="startMerge()" id="btn-run-merge" class="mt-6 w-full bg-jne-red text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition flex items-center justify-center">
+                    <button onclick="startMerge()" id="btn-run-merge" class="mt-6 w-full bg-nadi-red text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition flex items-center justify-center">
                         <i class="fas fa-link mr-2"></i> Gabungkan File
                     </button>
                     
@@ -210,10 +210,10 @@
             <!-- TAB: ABOUT -->
             <div id="tab-about" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
-                    <h3 class="text-2xl font-bold text-jne-blue border-b pb-2">Panduan Penggunaan</h3>
+                    <h3 class="text-2xl font-bold text-nadi-blue border-b pb-2">Panduan Penggunaan</h3>
                     
                     <div>
-                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-cut text-jne-blue mr-2"></i> 1. Fitur Data Splitter</h4>
+                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-cut text-nadi-blue mr-2"></i> 1. Fitur Data Splitter</h4>
                         <ul class="list-disc pl-6 text-gray-600 mt-2 text-sm space-y-1">
                             <li>Memisahkan file operasional berdasarkan kolom <b>CODING</b> (Mapping: Open, Closed, Claim).</li>
                             <li>Kini mendukung Drag & Drop file serta pilihan output CSV / XLSX.</li>
@@ -221,7 +221,7 @@
                     </div>
                     
                     <div>
-                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-layer-group text-jne-blue mr-2"></i> 2. Fitur Split by Rows</h4>
+                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-layer-group text-nadi-blue mr-2"></i> 2. Fitur Split by Rows</h4>
                         <ul class="list-disc pl-6 text-gray-600 mt-2 text-sm space-y-1">
                             <li>Memecah 1 file besar menjadi beberapa file kecil agar ringan dibuka di Excel.</li>
                             <li>Anda bisa mengatur jumlah baris per file (misal 20.000 baris). Output otomatis ter-download.</li>
@@ -229,7 +229,7 @@
                     </div>
 
                     <div>
-                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-object-group text-jne-red mr-2"></i> 3. Fitur Data Merger</h4>
+                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-object-group text-nadi-red mr-2"></i> 3. Fitur Data Merger</h4>
                         <ul class="list-disc pl-6 text-gray-600 mt-2 text-sm space-y-1">
                             <li>Menumpuk ratusan file CSV/Excel menjadi satu. Limit otomatis 500MB (Terpotong ke Part 2).</li>
                         </ul>
@@ -240,7 +240,7 @@
             <!-- TAB: PROFILE -->
             <div id="tab-profile" class="tab-content max-w-3xl mx-auto">
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-                    <div class="bg-gradient-to-r from-jne-blue to-blue-900 h-32 relative"></div>
+                    <div class="bg-gradient-to-r from-nadi-blue to-blue-900 h-32 relative"></div>
                     <div class="px-8 pb-8 flex flex-col items-center -mt-16 relative z-10">
                         <div class="w-32 h-32 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center text-5xl text-blue-800 overflow-hidden">
                             <i class="fas fa-user-tie"></i>
@@ -254,10 +254,10 @@
                                 <span class="text-sm font-bold text-gray-700">Email Pribadi</span>
                                 <span class="text-xs text-gray-500 text-center">atte.achmad@gmail.com</span>
                             </a>
-                            <a href="mailto:achmad.taufik@jne.co.id" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
-                                <i class="fas fa-briefcase text-2xl text-jne-blue mb-2"></i>
+                            <a href="mailto:achmad.taufik@nadi.co.id" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fas fa-briefcase text-2xl text-nadi-blue mb-2"></i>
                                 <span class="text-sm font-bold text-gray-700">Email Corporate</span>
-                                <span class="text-xs text-gray-500 text-center">achmad.taufik@jne.co.id</span>
+                                <span class="text-xs text-gray-500 text-center">achmad.taufik@nadi.co.id</span>
                             </a>
                             <a href="https://wa.me/6285779300030" target="_blank" class="flex flex-col items-center p-4 bg-green-50 rounded-lg border border-green-200 hover:border-green-400 hover:shadow-md transition">
                                 <i class="fab fa-whatsapp text-2xl text-green-600 mb-2"></i>

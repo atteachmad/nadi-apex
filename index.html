@@ -28,17 +28,35 @@
         /* Transisi Drag & Drop */
         .dropzone { transition: all 0.3s ease; }
         .dropzone.dragover { background-color: #e0f2fe; border-color: #004A94; border-style: solid; }
+        
+        /* Animasi Recording */
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(227, 30, 36, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(227, 30, 36, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(227, 30, 36, 0); }
+        }
+        .recording-active { animation: pulse-red 1.5s infinite; background-color: #E31E24 !important; color: white !important; }
+	/* Tambahkan di dalam tag <style> Anda */
+	.sidebar-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+	.sidebar-closed { margin-left: -256px; } /* -256px = -64 (w-64) */
     </style>
 </head>
 <body class="flex h-screen text-gray-800">
 
-    <!-- SIDEBAR -->
-    <aside class="w-64 bg-nadi-blue text-white flex flex-col shadow-xl z-20">
-        <div class="p-6 border-b border-blue-800 text-center">
+    <!-- SIDEBAR OVERLAY (Hanya terlihat di Mobile) -->
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden transition-opacity md:hidden"></div>
+
+    <!-- SIDEBAR (Default Terbuka di Desktop, Tertutup di HP) -->
+    <aside id="sidebar" class="group sidebar-transition w-64 bg-nadi-blue text-white flex flex-col shadow-xl z-40 fixed inset-y-0 left-0 -translate-x-full md:relative md:translate-x-0 h-screen">
+        <div class="p-6 border-b border-blue-800 text-center relative">
             <h1 class="text-2xl font-bold tracking-wider"><span class="text-nadi-red">Nadi</span>X-Bot</h1>
             <p class="text-xs text-blue-200 mt-1">Enterprise Data Engineering</p>
+            <!-- Tombol Close (Hanya muncul di Mobile) -->
+            <button onclick="toggleSidebar()" class="absolute top-4 right-4 text-blue-200 hover:text-white transition md:hidden">
+                <i class="fas fa-times text-xl"></i>
+            </button>
         </div>
-        <nav class="flex-1 p-4 space-y-2">
+        <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             <button onclick="switchTab('splitter')" id="btn-splitter" class="w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
                 <i class="fas fa-cut w-6"></i> Data Splitter
             </button>
@@ -47,6 +65,9 @@
             </button>
             <button onclick="switchTab('merger')" id="btn-merger" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
                 <i class="fas fa-object-group w-6"></i> Data Merger
+            </button>
+            <button onclick="switchTab('audiotext')" id="btn-audiotext" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-microphone-alt w-6"></i> Audio & Text
             </button>
             <button onclick="switchTab('about')" id="btn-about" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
                 <i class="fas fa-book w-6"></i> Panduan & About
@@ -61,36 +82,42 @@
     </aside>
 
     <!-- MAIN CONTENT AREA -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-nadi-light relative">
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-nadi-light relative w-full">
         
-        <!-- HEADER -->
-        <header class="bg-white shadow-sm h-16 flex items-center px-8 justify-between z-10">
-            <h2 class="text-xl font-semibold text-gray-700" id="header-title">Data Splitter (Auto Kategorisasi)</h2>
-            <div class="flex items-center space-x-4">
-                <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-200 shadow-sm">
-                    <i class="fas fa-check-circle"></i> QC Passed
+        <!-- HEADER (Sticky Top) -->
+        <header class="bg-white shadow-sm h-16 flex items-center px-4 md:px-8 justify-between z-10 flex-shrink-0 w-full sticky top-0">
+            <div class="flex items-center">
+                <!-- Tombol Toggle Sidebar (Selalu Muncul) -->
+                <button onclick="toggleSidebar()" class="text-nadi-blue focus:outline-none mr-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition flex items-center bg-gray-50 border border-gray-200 shadow-sm" title="Toggle Sidebar">
+                    <i class="fas fa-bars text-lg"></i>
+                    <!-- Teks Kecil Pendamping Ikon -->
+                    <span id="sidebar-toggle-text" class="text-xs font-bold ml-2 text-gray-600 hidden sm:inline">Tutup Sidebar</span>
+                </button>
+                <h2 class="text-base md:text-xl font-semibold text-gray-700 truncate" id="header-title">Data Splitter (Auto Kategorisasi)</h2>
+            </div>
+            <div class="flex items-center space-x-2 md:space-x-4">
+                <span class="bg-green-100 text-green-700 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold border border-green-200 shadow-sm whitespace-nowrap">
+                    <i class="fas fa-check-circle"></i> <span class="hidden sm:inline">QC Passed</span>
                 </span>
             </div>
         </header>
 
         <!-- SCROLLABLE CONTENT -->
-        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
             
-            <!-- TAB: SPLITTER (Auto Kategori) -->
+            <!-- TAB: SPLITTER -->
             <div id="tab-splitter" class="tab-content active max-w-4xl mx-auto">
-                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+                <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
-                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-file-export"></i> Split Data (Open, Closed, Claim)</h3>
+                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-file-export"></i> Split Data</h3>
                         <p class="text-sm text-gray-500 mt-2">Pisahkan file berdasarkan Kolom CODING. Tarik file ke kotak di bawah atau klik untuk memilih.</p>
                     </div>
                     
-                    <!-- Drag & Drop Zone -->
-                    <div id="dropzone-split" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-10 text-center bg-gray-50 cursor-pointer">
+                    <div id="dropzone-split" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-10 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
-                        <br>
                         <input type="file" id="split-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('split-files', 'split-label')">
-                        <label for="split-files" class="bg-nadi-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik File Kesini</label>
-                        <p id="split-label" class="mt-3 text-sm font-bold text-gray-600">Belum ada file yang dipilih</p>
+                        <label for="split-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm md:text-base w-full md:w-auto">Pilih / Tarik File Kesini</label>
+                        <p id="split-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
 
                     <div class="mt-4">
@@ -102,7 +129,7 @@
                     </div>
 
                     <button onclick="startSplit()" id="btn-run-split" class="mt-6 w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition flex items-center justify-center">
-                        <i class="fas fa-play mr-2"></i> Eksekusi Pemisahan Data
+                        <i class="fas fa-play mr-2"></i> Eksekusi Pemisahan
                     </button>
                     
                     <div id="split-progress-container" class="mt-6 hidden">
@@ -117,24 +144,24 @@
                 </div>
             </div>
 
-            <!-- TAB: ROW SPLITTER (Split by Rows) -->
+            <!-- TAB: ROW SPLITTER -->
             <div id="tab-rowsplitter" class="tab-content max-w-4xl mx-auto">
-                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+                <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
-                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-layer-group"></i> Split Data by Rows</h3>
-                        <p class="text-sm text-gray-500 mt-2">Pecah 1 file besar menjadi beberapa file kecil berdasarkan jumlah baris secara otomatis.</p>
+                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-layer-group"></i> Split by Rows</h3>
+                        <p class="text-sm text-gray-500 mt-2">Pecah 1 file besar menjadi beberapa file kecil berdasarkan jumlah baris.</p>
                     </div>
                     
-                    <!-- Drag & Drop Zone -->
-                    <div id="dropzone-row" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-10 text-center bg-gray-50 cursor-pointer">
+                    <div id="dropzone-row" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-10 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                         <input type="file" id="row-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('row-files', 'row-label')">
-                        <label for="row-files" class="bg-nadi-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik File Kesini</label>
-                        <p id="row-label" class="mt-3 text-sm font-bold text-gray-600">Belum ada file yang dipilih</p>
+                        <label for="row-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm md:text-base w-full md:w-auto">Pilih / Tarik File Kesini</label>
+                        <p id="row-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
                     
-                    <div class="mt-4 flex space-x-4">
+                    <div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
                         <div class="flex-1">
-                            <label class="block text-sm font-bold text-gray-700 mb-1">Potong per berapa baris?</label>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Potong per baris:</label>
                             <input type="number" id="row-limit" value="20000" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                         </div>
                         <div class="flex-1">
@@ -147,7 +174,7 @@
                     </div>
 
                     <button onclick="startRowSplit()" id="btn-run-row" class="mt-6 w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center">
-                        <i class="fas fa-cut mr-2"></i> Potong File Sekarang
+                        <i class="fas fa-cut mr-2"></i> Potong File
                     </button>
                     
                     <div id="row-progress-container" class="mt-6 hidden">
@@ -162,22 +189,22 @@
                 </div>
             </div>
 
-            <!-- TAB: MERGER (Penggabung) -->
+            <!-- TAB: MERGER -->
             <div id="tab-merger" class="tab-content max-w-4xl mx-auto">
-                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+                <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
-                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-compress-arrows-alt"></i> Penggabung Data (Merger)</h3>
+                        <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-compress-arrows-alt"></i> Data Merger</h3>
                         <p class="text-sm text-gray-500 mt-2">Gabungkan ratusan file CSV/XLSX menjadi satu file utuh.</p>
                     </div>
                     
-                    <!-- Drag & Drop Zone -->
-                    <div id="dropzone-merge" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-10 text-center bg-gray-50 cursor-pointer">
+                    <div id="dropzone-merge" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-10 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                         <input type="file" id="merge-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('merge-files', 'merge-label')">
-                        <label for="merge-files" class="bg-nadi-blue text-white px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition">Pilih / Tarik Banyak File Kesini</label>
-                        <p id="merge-label" class="mt-3 text-sm font-bold text-gray-600">Belum ada file yang dipilih</p>
+                        <label for="merge-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm md:text-base w-full md:w-auto">Pilih / Tarik Banyak File Kesini</label>
+                        <p id="merge-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
                     
-                    <div class="mt-4 flex space-x-4">
+                    <div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
                             <select id="merge-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
@@ -207,31 +234,103 @@
                 </div>
             </div>
 
+            <!-- TAB: AUDIO & TEXT -->
+            <div id="tab-audiotext" class="tab-content max-w-6xl mx-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-auto">
+                    
+                    <!-- AUDIO TO TEXT CARD -->
+                    <div class="bg-white p-5 md:p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col">
+                        <div class="flex justify-between items-center border-b pb-2 mb-4">
+                            <h3 class="text-lg font-bold text-nadi-blue"><i class="fas fa-microphone-alt"></i> Audio to Text</h3>
+                            <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Autosaved</span>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-3">Ubah suara ke teks (Text tidak hilang saat ter-refresh).</p>
+                        
+                        <textarea id="stt-result" class="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-nadi-blue focus:border-nadi-blue resize-none min-h-[200px] md:min-h-[250px] custom-scrollbar text-gray-700" placeholder="Mulai merekam, atau ketik manual di sini..."></textarea>
+                        
+                        <div class="mt-4 flex flex-col space-y-3">
+                            <div class="flex space-x-2">
+                                <button id="btn-stt-toggle" class="bg-nadi-blue text-white px-4 py-3 rounded shadow hover:bg-blue-800 flex-1 font-bold transition duration-300 flex justify-center items-center text-sm md:text-base">
+                                    <i class="fas fa-microphone md:mr-2"></i> <span id="stt-btn-text" class="hidden md:inline ml-2">Mulai Merekam</span>
+                                </button>
+                                <button id="btn-stt-clear" class="bg-gray-200 text-gray-700 px-4 py-3 rounded shadow hover:bg-gray-300 transition" title="Hapus Teks">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                                <button onclick="saveAudioText('txt')" class="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 flex-1 text-xs md:text-sm transition flex justify-center items-center">
+                                    <i class="fas fa-file-alt mr-2"></i> Save txt
+                                </button>
+                                <button onclick="saveAudioText('doc')" class="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 flex-1 text-xs md:text-sm transition flex justify-center items-center">
+                                    <i class="fas fa-file-word mr-2"></i> Save doc
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TEXT TO AUDIO CARD -->
+                    <div class="bg-white p-5 md:p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col">
+                        <div class="border-b pb-2 mb-4">
+                            <h3 class="text-lg font-bold text-nadi-blue"><i class="fas fa-volume-up"></i> Text to Audio</h3>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-3">Ketik/paste teks di bawah untuk dibacakan oleh sistem.</p>
+                        
+                        <textarea id="tts-input" class="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-nadi-blue focus:border-nadi-blue resize-none min-h-[200px] md:min-h-[250px] custom-scrollbar text-gray-700" placeholder="Ketik atau paste teks di sini untuk dibacakan..."></textarea>
+                        
+                        <div class="mt-4 flex flex-col space-y-3">
+                            <div class="flex items-center space-x-2">
+                                <label class="text-sm font-bold text-gray-700 w-16">Bahasa:</label>
+                                <select id="tts-lang" class="flex-1 p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
+                                    <option value="id-ID">Indonesia</option>
+                                    <option value="en-US">English</option>
+                                </select>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button id="btn-tts-play" class="bg-green-600 text-white px-4 py-3 rounded shadow hover:bg-green-700 flex-1 font-bold transition flex justify-center items-center">
+                                    <i class="fas fa-play mr-2"></i> Bacakan Teks
+                                </button>
+                                <button id="btn-tts-stop" class="bg-nadi-red text-white px-4 py-3 rounded shadow hover:bg-red-800 transition">
+                                    <i class="fas fa-stop"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
             <!-- TAB: ABOUT -->
             <div id="tab-about" class="tab-content max-w-4xl mx-auto">
-                <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
-                    <h3 class="text-2xl font-bold text-nadi-blue border-b pb-2">Panduan Penggunaan</h3>
+                <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
+                    <h3 class="text-xl md:text-2xl font-bold text-nadi-blue border-b pb-2">Panduan Penggunaan</h3>
                     
                     <div>
-                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-cut text-nadi-blue mr-2"></i> 1. Fitur Data Splitter</h4>
-                        <ul class="list-disc pl-6 text-gray-600 mt-2 text-sm space-y-1">
-                            <li>Memisahkan file operasional berdasarkan kolom <b>CODING</b> (Mapping: Open, Closed, Claim).</li>
-                            <li>Kini mendukung Drag & Drop file serta pilihan output CSV / XLSX.</li>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-cut text-nadi-blue mr-2"></i> 1. Data Splitter</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                            <li>Memisahkan file operasional berdasarkan kolom <b>CODING</b> (Open, Closed, Claim).</li>
+                            <li>Kini mendukung Drag & Drop file serta output CSV / XLSX.</li>
                         </ul>
                     </div>
                     
                     <div>
-                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-layer-group text-nadi-blue mr-2"></i> 2. Fitur Split by Rows</h4>
-                        <ul class="list-disc pl-6 text-gray-600 mt-2 text-sm space-y-1">
-                            <li>Memecah 1 file besar menjadi beberapa file kecil agar ringan dibuka di Excel.</li>
-                            <li>Anda bisa mengatur jumlah baris per file (misal 20.000 baris). Output otomatis ter-download.</li>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-layer-group text-nadi-blue mr-2"></i> 2. Split by Rows</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                            <li>Memecah 1 file besar menjadi beberapa file kecil berdasarkan jumlah baris (Misal 20.000 baris).</li>
                         </ul>
                     </div>
 
                     <div>
-                        <h4 class="font-bold text-gray-800 text-lg flex items-center"><i class="fas fa-object-group text-nadi-red mr-2"></i> 3. Fitur Data Merger</h4>
-                        <ul class="list-disc pl-6 text-gray-600 mt-2 text-sm space-y-1">
-                            <li>Menumpuk ratusan file CSV/Excel menjadi satu. Limit otomatis 500MB (Terpotong ke Part 2).</li>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-object-group text-nadi-red mr-2"></i> 3. Data Merger</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                            <li>Menumpuk ratusan file CSV/Excel menjadi satu secara cepat dan otomatis.</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-microphone-alt text-green-600 mr-2"></i> 4. Audio & Text</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                            <li><b>Audio to Text:</b> Otomatis mendeteksi ucapan dan merubah ke teks.</li>
+                            <li><b>Text to Audio:</b> Membaca teks dengan intonasi natural pilihan bahasa.</li>
                         </ul>
                     </div>
                 </div>
@@ -240,29 +339,35 @@
             <!-- TAB: PROFILE -->
             <div id="tab-profile" class="tab-content max-w-3xl mx-auto">
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
-                    <div class="bg-gradient-to-r from-nadi-blue to-blue-900 h-32 relative"></div>
-                    <div class="px-8 pb-8 flex flex-col items-center -mt-16 relative z-10">
-                        <div class="w-32 h-32 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center text-5xl text-blue-800 overflow-hidden">
+                    <div class="bg-gradient-to-r from-nadi-blue to-blue-900 h-24 md:h-32 relative"></div>
+                    <div class="px-4 md:px-8 pb-8 flex flex-col items-center -mt-12 md:-mt-16 relative z-10">
+                        <div class="w-24 h-24 md:w-32 md:h-32 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center text-4xl md:text-5xl text-blue-800 overflow-hidden">
                             <i class="fas fa-user-tie"></i>
                         </div>
-                        <h2 class="text-3xl font-bold text-gray-800 mt-4">Achmad Taufik</h2>
-                        <p class="text-blue-600 font-semibold tracking-wide">Data Engineer & System Analyst</p>
+                        <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mt-4 text-center">Achmad Taufik</h2>
+                        <p class="text-blue-600 font-semibold tracking-wide text-sm md:text-base text-center">Data Engineer & System Analyst</p>
                         
-                        <div class="w-full mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <a href="mailto:atte.achmad@gmail.com" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
-                                <i class="fas fa-envelope text-2xl text-blue-600 mb-2"></i>
-                                <span class="text-sm font-bold text-gray-700">Email Pribadi</span>
-                                <span class="text-xs text-gray-500 text-center">atte.achmad@gmail.com</span>
+                        <div class="w-full mt-6 md:mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <a href="mailto:atte.achmad@gmail.com" class="flex md:flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fas fa-envelope text-2xl text-blue-600 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full">
+                                    <span class="text-sm font-bold text-gray-700">Email Pribadi</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left md:text-center">atte.achmad@gmail.com</span>
+                                </div>
                             </a>
-                            <a href="mailto:achmad.taufik@nadi.co.id" class="flex flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
-                                <i class="fas fa-briefcase text-2xl text-nadi-blue mb-2"></i>
-                                <span class="text-sm font-bold text-gray-700">Email Corporate</span>
-                                <span class="text-xs text-gray-500 text-center">achmad.taufik@nadi.co.id</span>
+                            <a href="mailto:achmad.taufik@nadi.co.id" class="flex md:flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fas fa-briefcase text-2xl text-nadi-blue md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full">
+                                    <span class="text-sm font-bold text-gray-700">Email Corporate</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left md:text-center">achmad.taufik@nadi.co.id</span>
+                                </div>
                             </a>
-                            <a href="https://wa.me/6285779300030" target="_blank" class="flex flex-col items-center p-4 bg-green-50 rounded-lg border border-green-200 hover:border-green-400 hover:shadow-md transition">
-                                <i class="fab fa-whatsapp text-2xl text-green-600 mb-2"></i>
-                                <span class="text-sm font-bold text-gray-700">WhatsApp</span>
-                                <span class="text-xs text-gray-500">085779300030</span>
+                            <a href="https://wa.me/6285779300030" target="_blank" class="flex md:flex-col items-center p-4 bg-green-50 rounded-lg border border-green-200 hover:border-green-400 hover:shadow-md transition">
+                                <i class="fab fa-whatsapp text-2xl text-green-600 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full">
+                                    <span class="text-sm font-bold text-gray-700">WhatsApp</span>
+                                    <span class="text-xs text-gray-500 text-left md:text-center">085779300030</span>
+                                </div>
                             </a>
                         </div>
                     </div>
@@ -274,7 +379,67 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
-        // --- 1. UI & DRAG-DROP LOGIC ---
+        // --- 1. INISIALISASI & UI TEXT BERDASARKAN DEVICE ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const toggleText = document.getElementById('sidebar-toggle-text');
+            if (window.innerWidth >= 768) {
+                if (toggleText) toggleText.innerText = "Tutup Sidebar"; // Default PC terbuka
+            } else {
+                if (toggleText) toggleText.innerText = "Buka Sidebar"; // Default HP tertutup
+            }
+            
+            // Listener untuk menyesuaikan teks ketika layar di-resize
+            window.addEventListener('resize', () => {
+                const sidebar = document.getElementById('sidebar');
+                const isMobile = window.innerWidth < 768;
+                const isClosedDesktop = !isMobile && sidebar.classList.contains('md:-ml-64');
+                const isClosedMobile = isMobile && sidebar.classList.contains('-translate-x-full');
+                
+                if (isClosedDesktop || isClosedMobile) {
+                    if (toggleText) toggleText.innerText = "Buka Sidebar";
+                } else {
+                    if (toggleText) toggleText.innerText = "Tutup Sidebar";
+                }
+            });
+        });
+
+        // --- 2. SIDEBAR TOGGLE & NAVIGATION LOGIC ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggleText = document.getElementById('sidebar-toggle-text');
+            const isMobile = window.innerWidth < 768;
+            
+            if (isMobile) {
+                // Logika Toggle untuk HP (Sistem Overlay)
+                sidebar.classList.toggle('-translate-x-full');
+                
+                if (sidebar.classList.contains('-translate-x-full')) {
+                    // Tertutup
+                    overlay.classList.add('opacity-0');
+                    setTimeout(() => overlay.classList.add('hidden'), 300);
+                    if(toggleText) toggleText.innerText = "Buka Sidebar";
+                } else {
+                    // Terbuka
+                    overlay.classList.remove('hidden');
+                    setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+                    if(toggleText) toggleText.innerText = "Tutup Sidebar";
+                }
+            } else {
+                // Logika Toggle untuk Desktop (Sistem Mendorong Konten)
+                // -ml-64 menarik konten ke kiri secara mulus agar tidak blank space
+                sidebar.classList.toggle('md:-ml-64');
+                sidebar.classList.toggle('md:-translate-x-full');
+                sidebar.classList.toggle('md:translate-x-0');
+                
+                if (sidebar.classList.contains('md:-ml-64')) {
+                    if(toggleText) toggleText.innerText = "Buka Sidebar";
+                } else {
+                    if(toggleText) toggleText.innerText = "Tutup Sidebar";
+                }
+            }
+        }
+
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('aside nav button').forEach(el => {
@@ -289,10 +454,19 @@
                 'splitter': 'Data Splitter (Auto Kategorisasi)',
                 'rowsplitter': 'Split by Rows (Potong Baris)',
                 'merger': 'Data Merger (Penggabung Cepat)',
+                'audiotext': 'Audio & Text Converter',
                 'about': 'Panduan Penggunaan',
                 'profile': 'Profil Kreator'
             };
             document.getElementById('header-title').innerText = titles[tabId];
+
+            // Otomatis tutup menu sidebar hanya pada HP (Desktop biarkan terbuka)
+            if (window.innerWidth < 768) {
+                const sidebar = document.getElementById('sidebar');
+                if (!sidebar.classList.contains('-translate-x-full')) {
+                    toggleSidebar();
+                }
+            }
         }
 
         function updateFileLabel(inputId, labelId) {
@@ -318,7 +492,6 @@
                     updateFileLabel(inputId, labelId);
                 }
             });
-            // Klik pada area dropzone akan men-trigger file input
             zone.addEventListener('click', (e) => {
                 if(e.target !== input && e.target.tagName !== 'LABEL') {
                     input.click();
@@ -330,7 +503,6 @@
         setupDropzone('dropzone-row', 'row-files', 'row-label');
         setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
 
-        // Konstanta & Utility Download
         const MAX_MB = 500;
         const MAX_BYTES = MAX_MB * 1024 * 1024;
         const MAX_EXCEL_ROWS = 900000;
@@ -351,7 +523,7 @@
             }
         }
 
-        // --- 2. DATA SPLITTER (Kategori CODING) ---
+        // --- 3. DATA SPLITTER LOGIC ---
         const statusMapping = {
             'BY': 'Open', 'CR1': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'D26': 'Open', 'BLANK': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'R24': 'Open', 'R25': 'Open', 'PS1': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS4': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'UF': 'Open', 'R37': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'D30': 'Open', 'U37': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'CR4': 'Open', 'CR7': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'DP5': 'Open', 'CR8': 'Open', 'IP3': 'Open',
             'D01': 'Closed', 'D02': 'Closed', 'D03': 'Closed', 'D04': 'Closed', 'D05': 'Closed', 'D06': 'Closed', 'D07': 'Closed', 'D08': 'Closed', 'D09': 'Closed', 'D10': 'Closed', 'D11': 'Closed', 'D12': 'Closed', 'D15': 'Closed', 'D16': 'Closed', 'DB1': 'Closed', 'DB2': 'Closed', 'R01': 'Closed', 'R02': 'Closed', 'R03': 'Closed', 'R04': 'Closed', 'R05': 'Closed', 'R06': 'Closed', 'R07': 'Closed', 'R08': 'Closed', 'R09': 'Closed', 'R10': 'Closed', 'R11': 'Closed', 'R12': 'Closed', 'R13': 'Closed', 'R26': 'Closed', 'D1': 'Closed',
@@ -386,7 +558,6 @@
                     let isFirstRow = true;
                     let codingIndex = -1;
 
-                    // Menggunakan PapaParse untuk membaca baris per baris secara ringan
                     Papa.parse(file, {
                         header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
                         chunk: function(results, parser) {
@@ -417,7 +588,6 @@
                                     memory[status].data.push(row);
                                     memory[status].bytes += row.join(",").length;
                                     
-                                    // Chunking Limit (500MB untuk CSV, 900k baris untuk XLSX)
                                     let isLimitReached = outFormat === 'csv' ? 
                                         (memory[status].bytes >= MAX_BYTES) : 
                                         (memory[status].data.length >= MAX_EXCEL_ROWS);
@@ -440,9 +610,8 @@
                 document.getElementById('split-percent').innerText = `${pct}%`;
             }
 
-            // Export sisa data
             ['Open', 'Closed', 'Claim'].forEach(cat => {
-                if(memory[cat].data.length > 1) { // Lebih dari sekadar header
+                if(memory[cat].data.length > 1) { 
                     let fname = memory[cat].part > 1 ? `${cat}_Part${memory[cat].part}` : cat;
                     exportData(memory[cat].data, outFormat, fname);
                 }
@@ -453,7 +622,7 @@
             alert('Pemotongan selesai!');
         }
 
-        // --- 3. SPLIT BY ROWS (Potong per baris) ---
+        // --- 4. SPLIT BY ROWS LOGIC ---
         async function startRowSplit() {
             const files = document.getElementById('row-files').files;
             if (files.length === 0) return alert('Silakan pilih/tarik file terlebih dahulu!');
@@ -476,7 +645,6 @@
                 progStatus.innerText = `Memotong: ${file.name} (${i+1}/${files.length})`;
                 
                 await new Promise(async (resolve) => {
-                    // Logic untuk file Excel/XLSX (harus dibaca full ke memory lalu di split)
                     if(file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
                         const reader = new FileReader();
                         reader.onload = function(e) {
@@ -492,7 +660,7 @@
                             
                             for(let j = 1; j < json.length; j++) {
                                 chunkData.push(json[j]);
-                                if(chunkData.length - 1 >= rowLimit) { // -1 karena header tidak dihitung sbg data
+                                if(chunkData.length - 1 >= rowLimit) {
                                     exportData(chunkData, outFormat, `${baseName}_Part${part}`);
                                     chunkData = [header];
                                     part++;
@@ -505,7 +673,6 @@
                         };
                         reader.readAsArrayBuffer(file);
                     } 
-                    // Logic untuk CSV (streaming, aman untuk file bergiga-giga)
                     else {
                         let headerRow = null;
                         let part = 1;
@@ -547,7 +714,7 @@
             btn.disabled = false; btn.classList.remove('opacity-50');
         }
 
-        // --- 4. DATA MERGER LOGIC ---
+        // --- 5. DATA MERGER LOGIC ---
         async function startMerge() {
             const files = document.getElementById('merge-files').files;
             if (files.length === 0) return alert('Pilih/tarik file untuk digabung!');
@@ -580,7 +747,7 @@
                             if(rows.length === 0) return;
                             
                             if (isFirstRow) {
-                                if (headerWritten) rows.shift(); // Buang header duplikat
+                                if (headerWritten) rows.shift();
                                 else headerWritten = true;
                                 isFirstRow = false;
                             }
@@ -597,9 +764,9 @@
                             if(isLimitReached) {
                                 exportData(masterData, outFormat, `${baseName}_Part${partCounter}`);
                                 partCounter++;
-                                masterData = []; // Optional: simpan header kembali jika ingin tiap file part ada header
+                                masterData = [];
                                 currentBytes = 0;
-                                headerWritten = false; // Memaksa file part selanjutnya ambil header baru dari file berikutnya
+                                headerWritten = false;
                             }
                         },
                         complete: function() { resolve(); }
@@ -619,6 +786,160 @@
             progStatus.innerText = "Selesai digabung!";
             btn.disabled = false; btn.classList.remove('opacity-50');
         }
+
+        // --- 6. AUDIO & TEXT LOGIC ---
+        
+        // 6A. Persistent Storage Setup
+        const sttTextarea = document.getElementById('stt-result');
+        const sttBtnToggle = document.getElementById('btn-stt-toggle');
+        const sttBtnText = document.getElementById('stt-btn-text');
+        const sttIcon = sttBtnToggle.querySelector('i');
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedText = localStorage.getItem('nadi_stt_text');
+            if(savedText) sttTextarea.value = savedText;
+        });
+
+        sttTextarea.addEventListener('input', () => {
+            localStorage.setItem('nadi_stt_text', sttTextarea.value);
+        });
+
+        document.getElementById('btn-stt-clear').addEventListener('click', () => {
+            if(confirm('Yakin ingin menghapus semua teks?')) {
+                sttTextarea.value = '';
+                localStorage.removeItem('nadi_stt_text');
+            }
+        });
+
+        // 6B. Speech to Text (Web Speech API)
+        let recognition;
+        let isRecording = false;
+        
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'id-ID';
+
+            recognition.onstart = () => {
+                isRecording = true;
+                sttBtnText.innerText = window.innerWidth < 768 ? "Merekam.." : "Sedang Merekam (Stop)";
+                sttBtnToggle.classList.add('recording-active');
+                sttIcon.classList.replace('fa-microphone', 'fa-stop-circle');
+            };
+
+            recognition.onresult = (event) => {
+                let finalTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + ' ';
+                    }
+                }
+                if (finalTranscript) {
+                    sttTextarea.value += finalTranscript;
+                    localStorage.setItem('nadi_stt_text', sttTextarea.value);
+                    sttTextarea.scrollTop = sttTextarea.scrollHeight;
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error', event.error);
+                if(event.error === 'not-allowed') {
+                    alert('Izin penggunaan mikrofon ditolak oleh browser.');
+                    stopRecordingUI();
+                }
+            };
+
+            recognition.onend = () => {
+                if (isRecording) {
+                    try { recognition.start(); } catch(e) {}
+                } else {
+                    stopRecordingUI();
+                }
+            };
+        } else {
+            sttBtnToggle.disabled = true;
+            sttBtnToggle.classList.replace('bg-nadi-blue', 'bg-gray-400');
+            sttBtnText.innerText = "Browser Tidak Support Mic";
+        }
+
+        function stopRecordingUI() {
+            isRecording = false;
+            sttBtnText.innerText = "Mulai Merekam";
+            sttBtnToggle.classList.remove('recording-active');
+            sttIcon.classList.replace('fa-stop-circle', 'fa-microphone');
+        }
+
+        sttBtnToggle.addEventListener('click', () => {
+            if(!recognition) return alert('Fitur ini tidak didukung di browser Anda. Gunakan Google Chrome versi terbaru.');
+            
+            if(isRecording) {
+                isRecording = false;
+                recognition.stop();
+                stopRecordingUI();
+            } else {
+                try {
+                    recognition.start();
+                } catch(e) {
+                    console.log(e);
+                }
+            }
+        });
+
+        // Save Txt / Doc
+        function saveAudioText(type) {
+            const text = sttTextarea.value.trim();
+            if(!text) return alert('Tidak ada teks untuk disimpan.');
+
+            let blob, filename;
+            if(type === 'txt') {
+                blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                filename = 'Nadi_AudioToText.txt';
+            } else if(type === 'doc') {
+                const htmlFormat = `<html xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>${text.replace(/\n/g, '<br>')}</body></html>`;
+                blob = new Blob([htmlFormat], { type: 'application/msword;charset=utf-8' });
+                filename = 'Nadi_AudioToText.doc';
+            }
+
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 6C. Text to Audio (Speech Synthesis)
+        const ttsInput = document.getElementById('tts-input');
+        const btnTtsPlay = document.getElementById('btn-tts-play');
+        const btnTtsStop = document.getElementById('btn-tts-stop');
+        const ttsLang = document.getElementById('tts-lang');
+
+        btnTtsPlay.addEventListener('click', () => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                
+                const text = ttsInput.value.trim();
+                if(!text) return alert('Ketikkan teks terlebih dahulu!');
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = ttsLang.value;
+                utterance.rate = 0.95; 
+                utterance.pitch = 1;
+
+                window.speechSynthesis.speak(utterance);
+            } else {
+                alert("Browser Anda tidak mendukung fitur Text to Audio.");
+            }
+        });
+
+        btnTtsStop.addEventListener('click', () => {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+        });
+
     </script>
 </body>
 </html>

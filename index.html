@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>nadi Nadi_X-Bot Dashboard | Achmad Taufik</title>
+    <title>Nadi_X-Bot Dashboard | Achmad Taufik</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -22,9 +22,11 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
         .tab-content { display: none; }
         .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
         /* Transisi Drag & Drop */
         .dropzone { transition: all 0.3s ease; }
         .dropzone.dragover { background-color: #e0f2fe; border-color: #004A94; border-style: solid; }
@@ -36,74 +38,129 @@
             100% { box-shadow: 0 0 0 0 rgba(227, 30, 36, 0); }
         }
         .recording-active { animation: pulse-red 1.5s infinite; background-color: #E31E24 !important; color: white !important; }
-	/* Tambahkan di dalam tag <style> Anda */
-	.sidebar-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-	.sidebar-closed { margin-left: -256px; } /* -256px = -64 (w-64) */
+
+        /* ==========================================================
+           MODIFIKASI: LOGIKA TRANSISI COLLAPSE SIDEBAR (DESKTOP) 
+           ========================================================== */
+        
+        /* Aturan Dasar Sidebar */
+        #sidebar {
+            width: 16rem; /* Setara w-64 */
+            transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            overflow-x: hidden;
+        }
+        
+        /* Kelas Collapse Aktif (Mengecil) */
+        #sidebar.collapsed {
+            width: 5.5rem; /* Cukup menampung padding dan ikon center */
+        }
+
+        /* Transisi Smooth untuk Teks (Brand & Menu) */
+        .hide-on-collapse {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s, margin 0.3s;
+            opacity: 1;
+            visibility: visible;
+            white-space: nowrap;
+        }
+
+        /* Teks Hilang saat Collapsed */
+        #sidebar.collapsed .hide-on-collapse {
+            opacity: 0;
+            width: 0;
+            margin-left: 0;
+            padding: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* Penyesuaian Flex Alignment & Padding Saat Sidebar Mengecil */
+        #sidebar.collapsed .header-container { padding-left: 1rem; padding-right: 1rem; justify-content: center; }
+        #sidebar.collapsed .btn-wrapper { margin-left: 0; }
+        #sidebar.collapsed .menu-btn { justify-content: center; padding-left: 0; padding-right: 0; }
+        
     </style>
 </head>
-<body class="flex h-screen text-gray-800">
+<body class="flex h-screen w-full text-gray-800">
 
-    <!-- SIDEBAR OVERLAY (Hanya terlihat di Mobile) -->
-    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden transition-opacity md:hidden"></div>
-
-    <!-- SIDEBAR (Default Terbuka di Desktop, Tertutup di HP) -->
-    <aside id="sidebar" class="group sidebar-transition w-64 bg-nadi-blue text-white flex flex-col shadow-xl z-40 fixed inset-y-0 left-0 -translate-x-full md:relative md:translate-x-0 h-screen">
-        <div class="p-6 border-b border-blue-800 text-center relative">
-            <h1 class="text-2xl font-bold tracking-wider"><span class="text-nadi-red">Nadi</span>X-Bot</h1>
-            <p class="text-xs text-blue-200 mt-1">Enterprise Data Engineering</p>
-            <!-- Tombol Close (Hanya muncul di Mobile) -->
-            <button onclick="toggleSidebar()" class="absolute top-4 right-4 text-blue-200 hover:text-white transition md:hidden">
-                <i class="fas fa-times text-xl"></i>
-            </button>
+    <!-- SIDEBAR (Refactored untuk Smooth Collapse) -->
+    <aside id="sidebar" class="bg-nadi-blue text-white flex flex-col shadow-xl z-40 h-screen flex-shrink-0 relative">
+        
+        <!-- Header Sidebar (Kontainer Ikon Toggle & Brand) -->
+        <div class="header-container p-4 border-b border-blue-800 flex items-center justify-between min-h-[5.5rem] transition-all duration-300">
+            <!-- Brand Text (Otomatis Hilang Saat Collapsed) -->
+            <div class="brand-text flex-1 flex flex-col justify-center overflow-hidden hide-on-collapse mr-2">
+                <h1 class="text-2xl font-bold tracking-wider"><span class="text-nadi-red">Nadi</span>X-Bot</h1>
+                <p class="text-[10px] text-blue-200 mt-1 truncate">Enterprise Data Engineering</p>
+            </div>
+            
+            <!-- Tombol Toggle Sidebar (Gemini Style) -->
+            <div class="btn-wrapper relative group ml-auto flex-shrink-0 transition-all duration-300">
+                <!-- SVG Ikon persis Layout Gemini -->
+                <button onclick="toggleSidebar()" class="text-blue-200 hover:text-white transition-colors focus:outline-none p-2.5 rounded-lg hover:bg-blue-800 flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="9" y1="3" x2="9" y2="21"></line>
+                    </svg>
+                </button>
+                <!-- Hover Tooltip Melayang -->
+                <div id="sidebar-tooltip" class="absolute top-full right-0 mt-2 whitespace-nowrap bg-gray-800 text-white font-semibold text-xs px-2.5 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg border border-gray-600">
+                    Tutup Sidebar
+                </div>
+            </div>
         </div>
-        <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
-            <button onclick="switchTab('splitter')" id="btn-splitter" class="w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
-                <i class="fas fa-cut w-6"></i> Data Splitter
+
+        <!-- Menu Navigasi -->
+        <nav class="flex-1 p-4 space-y-3 overflow-y-auto custom-scrollbar">
+            <button onclick="switchTab('splitter')" id="btn-splitter" class="menu-btn w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
+                <i class="fas fa-cut w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Data Splitter</span>
             </button>
-            <button onclick="switchTab('rowsplitter')" id="btn-rowsplitter" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
-                <i class="fas fa-layer-group w-6"></i> Split by Rows
+            <button onclick="switchTab('rowsplitter')" id="btn-rowsplitter" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-layer-group w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Split by Rows</span>
             </button>
-            <button onclick="switchTab('merger')" id="btn-merger" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
-                <i class="fas fa-object-group w-6"></i> Data Merger
+            <button onclick="switchTab('merger')" id="btn-merger" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-object-group w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Data Merger</span>
             </button>
-            <button onclick="switchTab('audiotext')" id="btn-audiotext" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
-                <i class="fas fa-microphone-alt w-6"></i> Audio & Text
+            <button onclick="switchTab('audiotext')" id="btn-audiotext" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-microphone-alt w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Audio & Text</span>
             </button>
-            <button onclick="switchTab('about')" id="btn-about" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
-                <i class="fas fa-book w-6"></i> Panduan & About
+            <button onclick="switchTab('about')" id="btn-about" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-book w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Panduan & About</span>
             </button>
-            <button onclick="switchTab('profile')" id="btn-profile" class="w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
-                <i class="fas fa-user-tie w-6"></i> Profil Kreator
+            <button onclick="switchTab('profile')" id="btn-profile" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-user-tie w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Profil Kreator</span>
             </button>
         </nav>
-        <div class="p-4 border-t border-blue-800 text-xs text-center text-blue-300">
-            &copy; 2026 Achmad Taufik
+
+        <!-- Footer Sidebar -->
+        <div class="p-4 border-t border-blue-800 text-xs text-center text-blue-300 flex justify-center items-center h-14">
+            <span class="hide-on-collapse">&copy; 2026 Achmad Taufik</span>
         </div>
     </aside>
 
-    <!-- MAIN CONTENT AREA -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-nadi-light relative w-full">
+    <!-- MAIN CONTENT AREA (Anti Tenggelam menggunakan min-w-0 dan flex-1) -->
+    <main class="flex-1 flex flex-col h-screen min-w-0 bg-nadi-light relative">
         
-        <!-- HEADER (Sticky Top) -->
-        <header class="bg-white shadow-sm h-16 flex items-center px-4 md:px-8 justify-between z-10 flex-shrink-0 w-full sticky top-0">
+        <!-- HEADER UTAMA (Tombol Hamburger Dihapus) -->
+        <header class="bg-white shadow-sm h-16 flex items-center px-6 md:px-8 justify-between z-10 flex-shrink-0 w-full relative">
             <div class="flex items-center">
-                <!-- Tombol Toggle Sidebar (Selalu Muncul) -->
-                <button onclick="toggleSidebar()" class="text-nadi-blue focus:outline-none mr-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition flex items-center bg-gray-50 border border-gray-200 shadow-sm" title="Toggle Sidebar">
-                    <i class="fas fa-bars text-lg"></i>
-                    <!-- Teks Kecil Pendamping Ikon -->
-                    <span id="sidebar-toggle-text" class="text-xs font-bold ml-2 text-gray-600 hidden sm:inline">Tutup Sidebar</span>
-                </button>
-                <h2 class="text-base md:text-xl font-semibold text-gray-700 truncate" id="header-title">Data Splitter (Auto Kategorisasi)</h2>
+                <!-- Judul Konten Selalu Terlihat Jelas -->
+                <h2 class="text-lg md:text-xl font-bold text-gray-700 truncate tracking-tight" id="header-title">Data Splitter (Auto Kategorisasi)</h2>
             </div>
-            <div class="flex items-center space-x-2 md:space-x-4">
-                <span class="bg-green-100 text-green-700 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold border border-green-200 shadow-sm whitespace-nowrap">
-                    <i class="fas fa-check-circle"></i> <span class="hidden sm:inline">QC Passed</span>
+            <div class="flex items-center">
+                <span class="bg-green-100 text-green-700 px-3 py-1.5 rounded-full text-xs font-bold border border-green-200 shadow-sm whitespace-nowrap flex items-center">
+                    <i class="fas fa-check-circle mr-1.5"></i> <span>QC Passed</span>
                 </span>
             </div>
         </header>
 
-        <!-- SCROLLABLE CONTENT -->
-        <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+        <!-- SCROLLABLE CONTENT (Layout Tetap Rapi) -->
+        <div class="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
             
             <!-- TAB: SPLITTER -->
             <div id="tab-splitter" class="tab-content active max-w-4xl mx-auto">
@@ -379,64 +436,20 @@
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
-        // --- 1. INISIALISASI & UI TEXT BERDASARKAN DEVICE ---
-        window.addEventListener('DOMContentLoaded', () => {
-            const toggleText = document.getElementById('sidebar-toggle-text');
-            if (window.innerWidth >= 768) {
-                if (toggleText) toggleText.innerText = "Tutup Sidebar"; // Default PC terbuka
-            } else {
-                if (toggleText) toggleText.innerText = "Buka Sidebar"; // Default HP tertutup
-            }
-            
-            // Listener untuk menyesuaikan teks ketika layar di-resize
-            window.addEventListener('resize', () => {
-                const sidebar = document.getElementById('sidebar');
-                const isMobile = window.innerWidth < 768;
-                const isClosedDesktop = !isMobile && sidebar.classList.contains('md:-ml-64');
-                const isClosedMobile = isMobile && sidebar.classList.contains('-translate-x-full');
-                
-                if (isClosedDesktop || isClosedMobile) {
-                    if (toggleText) toggleText.innerText = "Buka Sidebar";
-                } else {
-                    if (toggleText) toggleText.innerText = "Tutup Sidebar";
-                }
-            });
-        });
-
-        // --- 2. SIDEBAR TOGGLE & NAVIGATION LOGIC ---
+        // --- 1. SIDEBAR TOGGLE & NAVIGATION LOGIC ---
+        // Refactored logic specifically targeting Desktop Layout Toggle Behavior.
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebar-overlay');
-            const toggleText = document.getElementById('sidebar-toggle-text');
-            const isMobile = window.innerWidth < 768;
+            const tooltip = document.getElementById('sidebar-tooltip');
             
-            if (isMobile) {
-                // Logika Toggle untuk HP (Sistem Overlay)
-                sidebar.classList.toggle('-translate-x-full');
-                
-                if (sidebar.classList.contains('-translate-x-full')) {
-                    // Tertutup
-                    overlay.classList.add('opacity-0');
-                    setTimeout(() => overlay.classList.add('hidden'), 300);
-                    if(toggleText) toggleText.innerText = "Buka Sidebar";
-                } else {
-                    // Terbuka
-                    overlay.classList.remove('hidden');
-                    setTimeout(() => overlay.classList.remove('opacity-0'), 10);
-                    if(toggleText) toggleText.innerText = "Tutup Sidebar";
-                }
+            // Toggle class collapse pada sidebar
+            sidebar.classList.toggle('collapsed');
+            
+            // Mengubah status teks tooltip
+            if (sidebar.classList.contains('collapsed')) {
+                tooltip.innerText = "Buka Sidebar";
             } else {
-                // Logika Toggle untuk Desktop (Sistem Mendorong Konten)
-                // -ml-64 menarik konten ke kiri secara mulus agar tidak blank space
-                sidebar.classList.toggle('md:-ml-64');
-                sidebar.classList.toggle('md:-translate-x-full');
-                sidebar.classList.toggle('md:translate-x-0');
-                
-                if (sidebar.classList.contains('md:-ml-64')) {
-                    if(toggleText) toggleText.innerText = "Buka Sidebar";
-                } else {
-                    if(toggleText) toggleText.innerText = "Tutup Sidebar";
-                }
+                tooltip.innerText = "Tutup Sidebar";
             }
         }
 
@@ -459,16 +472,9 @@
                 'profile': 'Profil Kreator'
             };
             document.getElementById('header-title').innerText = titles[tabId];
-
-            // Otomatis tutup menu sidebar hanya pada HP (Desktop biarkan terbuka)
-            if (window.innerWidth < 768) {
-                const sidebar = document.getElementById('sidebar');
-                if (!sidebar.classList.contains('-translate-x-full')) {
-                    toggleSidebar();
-                }
-            }
         }
 
+        // --- 2. LOGIC DRAG & DROP & FILES ---
         function updateFileLabel(inputId, labelId) {
             const files = document.getElementById(inputId).files;
             const label = document.getElementById(labelId);
@@ -477,7 +483,6 @@
             else label.innerText = `${files.length} file dipilih`;
         }
 
-        // Setup Drag & Drop
         function setupDropzone(zoneId, inputId, labelId) {
             const zone = document.getElementById(zoneId);
             const input = document.getElementById(inputId);
@@ -939,7 +944,6 @@
                 window.speechSynthesis.cancel();
             }
         });
-
     </script>
 </body>
 </html>

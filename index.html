@@ -229,21 +229,28 @@
                         <p id="row-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
                     
-                    <div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                        <div class="flex-1">
-                            <label class="block text-sm font-bold text-gray-700 mb-1">Potong per baris:</label>
-                            <input type="number" id="row-limit" value="20000" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
-                        </div>
+<div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
-                            <select id="row-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
-                                <option value="csv">CSV</option>
+                            <select id="merge-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
+                                <option value="csv">CSV (Disarankan untuk data besar)</option>
                                 <option value="xlsx">Excel / XLSX</option>
                             </select>
                         </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Nama File Output:</label>
+                            <input type="text" id="merge-filename" value="Data_Gabungan" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
+                        </div>
+                    </div>
+                    
+                    <!-- FITUR BARU: Hapus Duplikat -->
+                    <div class="mt-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Hapus Duplikat Berdasarkan Kolom (Opsional):</label>
+                        <input type="text" id="merge-duplicate-col" placeholder="Contoh: AWB, NAMA, atau NO_RESI (Kosongkan jika tidak perlu)" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
+                        <p class="text-[11px] text-gray-500 mt-1"><i class="fas fa-info-circle"></i> Sistem akan menghapus baris yang ganda pada kolom ini. Kosongkan jika ingin menggabung semua data.</p>
                     </div>
 
-                    <button onclick="startRowSplit()" id="btn-run-row" class="mt-6 w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center">
+                    <button onclick="startMerge()" id="btn-run-merge" class="mt-6 w-full bg-nadi-red text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition flex items-center justify-center">
                         <i class="fas fa-cut mr-2"></i> Potong File
                     </button>
                     
@@ -274,7 +281,7 @@
                         <p id="merge-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
                     
-                    <div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+<div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
                             <select id="merge-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
@@ -286,6 +293,13 @@
                             <label class="block text-sm font-bold text-gray-700 mb-1">Nama File Output:</label>
                             <input type="text" id="merge-filename" value="Data_Gabungan" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                         </div>
+                    </div>
+                    
+                    <!-- FITUR BARU: Hapus Duplikat -->
+                    <div class="mt-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Hapus Duplikat Berdasarkan Kolom (Opsional):</label>
+                        <input type="text" id="merge-duplicate-col" placeholder="Contoh: AWB, NAMA, atau NO_RESI (Kosongkan jika tidak perlu)" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
+                        <p class="text-[11px] text-gray-500 mt-1"><i class="fas fa-info-circle"></i> Sistem akan menghapus baris yang ganda pada kolom ini. Kosongkan jika ingin menggabung semua data.</p>
                     </div>
 
                     <button onclick="startMerge()" id="btn-run-merge" class="mt-6 w-full bg-nadi-red text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition flex items-center justify-center">
@@ -756,12 +770,15 @@
             btn.disabled = false; btn.classList.remove('opacity-50');
         }
 
-        // --- 5. DATA MERGER LOGIC ---
+// --- 5. DATA MERGER LOGIC ---
         async function startMerge() {
             const files = document.getElementById('merge-files').files;
             if (files.length === 0) return alert('Pilih/tarik file untuk digabung!');
             const outFormat = document.getElementById('merge-format').value;
             const baseName = document.getElementById('merge-filename').value || 'Gabungan';
+            
+            // Ambil parameter penghapus duplikat
+            const dupColInput = document.getElementById('merge-duplicate-col').value.trim().toUpperCase();
 
             const btn = document.getElementById('btn-run-merge');
             const progCont = document.getElementById('merge-progress-container');
@@ -775,6 +792,11 @@
             let headerWritten = false;
             let partCounter = 1;
             let currentBytes = 0;
+            
+            // Variabel penyimpan data untuk Hapus Duplikat
+            let seenValues = new Set();
+            let dupColIndex = -1;
+            let globalHeader = [];
 
             for(let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -789,12 +811,40 @@
                             if(rows.length === 0) return;
                             
                             if (isFirstRow) {
-                                if (headerWritten) rows.shift();
-                                else headerWritten = true;
+                                if (!headerWritten) {
+                                    // Ambil header dari file pertama
+                                    globalHeader = rows.shift();
+                                    masterData.push(globalHeader);
+                                    currentBytes += globalHeader.join(",").length;
+                                    
+                                    // Cek indeks kolom acuan duplikat
+                                    if (dupColInput) {
+                                        const upperHeaders = globalHeader.map(h => String(h).trim().toUpperCase());
+                                        dupColIndex = upperHeaders.indexOf(dupColInput);
+                                        if (dupColIndex === -1) {
+                                            alert(`Peringatan: Kolom '${document.getElementById('merge-duplicate-col').value}' tidak ditemukan di file pertama. Penggabungan dilanjutkan tanpa filter duplikat.`);
+                                        }
+                                    }
+                                    headerWritten = true;
+                                } else {
+                                    // Hapus header dari file ke-2 dan seterusnya
+                                    rows.shift();
+                                }
                                 isFirstRow = false;
                             }
 
+                            // Proses isi baris data
                             rows.forEach(r => {
+                                // Eksekusi filter duplikat
+                                if (dupColIndex !== -1) {
+                                    const cellVal = String(r[dupColIndex] || '').trim().toUpperCase();
+                                    // Lewati jika kosong atau sudah pernah ada
+                                    if (cellVal !== '') {
+                                        if (seenValues.has(cellVal)) return;
+                                        seenValues.add(cellVal);
+                                    }
+                                }
+                                
                                 masterData.push(r);
                                 currentBytes += r.join(",").length;
                             });
@@ -806,9 +856,9 @@
                             if(isLimitReached) {
                                 exportData(masterData, outFormat, `${baseName}_Part${partCounter}`);
                                 partCounter++;
-                                masterData = [];
-                                currentBytes = 0;
-                                headerWritten = false;
+                                // Reset isi data, tetapi pastikan baris pertama tetap header
+                                masterData = [globalHeader];
+                                currentBytes = globalHeader.join(",").length;
                             }
                         },
                         complete: function() { resolve(); }
@@ -820,7 +870,7 @@
                 document.getElementById('merge-percent').innerText = `${pct}%`;
             }
 
-            if (masterData.length > 0) {
+            if (masterData.length > 1) { // Lebih dari 1 artinya ada data selain baris header
                 let fname = partCounter > 1 ? `${baseName}_Part${partCounter}` : baseName;
                 exportData(masterData, outFormat, fname);
             }
@@ -828,7 +878,6 @@
             progStatus.innerText = "Selesai digabung!";
             btn.disabled = false; btn.classList.remove('opacity-50');
         }
-
         // --- 6. AUDIO & TEXT LOGIC ---
         
         // 6A. Persistent Storage Setup

@@ -1026,54 +1026,5 @@
             }
         });
     </script>
-// --- 7. SECURITY & ANTI-INSPECT LOGIC ---
-        
-        // 1. Menonaktifkan Klik Kanan (Context Menu)
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        });
-
-        // 2. Menonaktifkan Shortcut Keyboard (F12, Ctrl+U, Ctrl+Shift+I, dll)
-        document.addEventListener('keydown', function(e) {
-            // F12 (DevTools)
-            if (e.key === 'F12' || e.keyCode === 123) {
-                e.preventDefault();
-            }
-            // Ctrl + U (View Page Source)
-            if (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.keyCode === 85)) {
-                e.preventDefault();
-            }
-            // Ctrl + Shift + I (Inspect Element)
-            if (e.ctrlKey && e.shiftKey && (e.key === 'i' || e.key === 'I' || e.keyCode === 73)) {
-                e.preventDefault();
-            }
-            // Ctrl + Shift + J (Console)
-            if (e.ctrlKey && e.shiftKey && (e.key === 'j' || e.key === 'J' || e.keyCode === 74)) {
-                e.preventDefault();
-            }
-            // Ctrl + Shift + C (Inspect Element)
-            if (e.ctrlKey && e.shiftKey && (e.key === 'c' || e.key === 'C' || e.keyCode === 67)) {
-                e.preventDefault();
-            }
-            // Ctrl + S (Save Page / Download)
-            if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.keyCode === 83)) {
-                e.preventDefault();
-            }
-            // Ctrl + P (Print Page)
-            if (e.ctrlKey && (e.key === 'p' || e.key === 'P' || e.keyCode === 80)) {
-                e.preventDefault();
-            }
-        });
-
-        // 3. Trik Debugger (Infinite Loop) 
-        // Jika user berhasil memaksa buka DevTools, halaman akan terus-menerus "Paused in debugger"
-        // sehingga mereka tidak bisa melihat atau menyalin elemen di tab 'Elements' atau 'Sources'.
-        setInterval(function() {
-            (function() {
-                return false;
-            }
-            ['constructor']('debugger')
-            ());
-        }, 50);
 </body>
 </html>

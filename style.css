@@ -1,0 +1,66 @@
+body { margin: 0; overflow: hidden; background-color: #F0F4F8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+.custom-scrollbar::-webkit-scrollbar { width: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+
+@keyframes fadeIn { 
+    from { opacity: 0; transform: translateY(10px); } 
+    to { opacity: 1; transform: translateY(0); } 
+}
+
+/* Transisi Drag & Drop */
+.dropzone { transition: all 0.3s ease; }
+.dropzone.dragover { background-color: #e0f2fe; border-color: #004A94; border-style: solid; }
+
+/* Animasi Recording */
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(227, 30, 36, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(227, 30, 36, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(227, 30, 36, 0); }
+}
+.recording-active { animation: pulse-red 1.5s infinite; background-color: #E31E24 !important; color: white !important; }
+
+/* ==========================================================
+   LOGIKA TRANSISI COLLAPSE SIDEBAR KHUSUS DESKTOP 
+   ========================================================== */
+@media (min-width: 768px) {
+    #sidebar {
+        width: 16rem; /* Sama dengan w-64 */
+        transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        overflow: visible !important; /* Mencegah tooltip terpotong */
+    }
+    #sidebar.desktop-collapsed {
+        width: 5.5rem; /* Ukuran menyusut yang presisi */
+    }
+    .hide-on-collapse {
+        transition: all 0.3s ease-in-out;
+        opacity: 1;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    /* Hilangkan teks brand dan menu saat mengecil */
+    #sidebar.desktop-collapsed .hide-on-collapse {
+        opacity: 0;
+        width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        pointer-events: none;
+    }
+    /* Posisi icon merapat ke tengah saat mengecil */
+    #sidebar.desktop-collapsed .header-container {
+        justify-content: center;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    #sidebar.desktop-collapsed .btn-wrapper {
+        margin-left: 0;
+    }
+    #sidebar.desktop-collapsed .menu-btn {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
+}

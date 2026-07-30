@@ -76,6 +76,7 @@ function setupDropzone(zoneId, inputId, labelId) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     
+    // Proteksi error jika element tidak ditemukan di HTML (Mencegah tombol mati)
     if(!zone || !input) return;
 
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
@@ -95,6 +96,7 @@ function setupDropzone(zoneId, inputId, labelId) {
     });
 }
 
+// Inisialisasi Dropzone yang aman
 setupDropzone('dropzone-split', 'split-files', 'split-label');
 setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
@@ -415,11 +417,11 @@ async function startMerge() {
 const sttTextarea = document.getElementById('stt-result');
 const sttBtnToggle = document.getElementById('btn-stt-toggle');
 const sttBtnText = document.getElementById('stt-btn-text');
-const sttIcon = sttBtnToggle.querySelector('i');
+const sttIcon = sttBtnToggle ? sttBtnToggle.querySelector('i') : null;
 
 window.addEventListener('DOMContentLoaded', () => {
     const savedText = localStorage.getItem('nadi_stt_text');
-    if(savedText) sttTextarea.value = savedText;
+    if(savedText && sttTextarea) sttTextarea.value = savedText;
 });
 
 if(sttTextarea) {
@@ -450,9 +452,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 
     recognition.onstart = () => {
         isRecording = true;
-        sttBtnText.innerText = window.innerWidth < 768 ? "Merekam.." : "Sedang Merekam (Stop)";
-        sttBtnToggle.classList.add('recording-active');
-        sttIcon.classList.replace('fa-microphone', 'fa-stop-circle');
+        if(sttBtnText) sttBtnText.innerText = window.innerWidth < 768 ? "Merekam.." : "Sedang Merekam (Stop)";
+        if(sttBtnToggle) sttBtnToggle.classList.add('recording-active');
+        if(sttIcon) sttIcon.classList.replace('fa-microphone', 'fa-stop-circle');
     };
 
     recognition.onresult = (event) => {
@@ -462,7 +464,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                 finalTranscript += event.results[i][0].transcript + ' ';
             }
         }
-        if (finalTranscript) {
+        if (finalTranscript && sttTextarea) {
             sttTextarea.value += finalTranscript;
             localStorage.setItem('nadi_stt_text', sttTextarea.value);
             sttTextarea.scrollTop = sttTextarea.scrollHeight;
@@ -488,7 +490,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     if(sttBtnToggle) {
         sttBtnToggle.disabled = true;
         sttBtnToggle.classList.replace('bg-nadi-blue', 'bg-gray-400');
-        sttBtnText.innerText = "Browser Tidak Support Mic";
+        if(sttBtnText) sttBtnText.innerText = "Browser Tidak Support Mic";
     }
 }
 
@@ -514,6 +516,7 @@ if(sttBtnToggle) {
 }
 
 function saveAudioText(type) {
+    if(!sttTextarea) return;
     const text = sttTextarea.value.trim();
     if(!text) return alert('Tidak ada teks untuk disimpan.');
 
@@ -569,32 +572,38 @@ if(btnTtsStop) {
     });
 }
 
+
 // --- 7. GOOGLE MAPS SCRAPER LOGIC (CLIENT-SIDE SERVERLESS) ---
 
-// Fungsi Download Template Kustom
+// Fungsi Download Template Kustom yang Aman (Telah Dibenarkan)
 function downloadCustomGmapsTemplate() {
-    const templateData = [
-        ["DATA_INPUT_UTAMA"],
-        ["JNE Express Tomang Raya Jakarta"],
-        ["-6.175392, 106.827153"],
-        ["Jl. Asia Afrika Bandung"]
-    ];
-    
-    const ws = XLSX.utils.aoa_to_sheet(templateData);
-    ws['!cols'] = [{ width: 45 }]; 
-    
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Input_Data");
-    XLSX.writeFile(wb, "Nadi_Template_Maps_Scraper.xlsx");
+    try {
+        const templateData = [
+            ["DATA_INPUT_UTAMA"],
+            ["JNE Express Tomang Raya Jakarta"],
+            ["-6.175392, 106.827153"],
+            ["Jl. Asia Afrika Bandung"]
+        ];
+        
+        const ws = XLSX.utils.aoa_to_sheet(templateData);
+        ws['!cols'] = [{ wch: 45 }]; 
+        
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Input_Data");
+        XLSX.writeFile(wb, "Nadi_Template_Maps_Scraper.xlsx");
+    } catch (err) {
+        alert("Terjadi kesalahan sistem saat membuat template. Pastikan memori browser Anda tidak penuh.");
+        console.error(err);
+    }
 }
 
 // Helper Jeda Asinkronus agar browser tidak crash dan tidak diblokir API
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Fungsi Utama Proses
+// Fungsi Utama Proses (Telah Dibebaskan dari Blokir)
 async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');
-    if (fileInput.files.length === 0) {
+    if (!fileInput || fileInput.files.length === 0) {
         return alert('Silakan unggah file Excel/CSV terlebih dahulu!');
     }
 

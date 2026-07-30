@@ -28,12 +28,12 @@ body { margin: 0; overflow: hidden; background-color: #F0F4F8; font-family: 'Seg
    ========================================================== */
 @media (min-width: 768px) {
     #sidebar {
-        width: 16rem; /* Sama dengan w-64 */
+        width: 16rem; 
         transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-        overflow: visible !important; /* Mencegah tooltip terpotong */
+        overflow: visible !important; 
     }
     #sidebar.desktop-collapsed {
-        width: 5.5rem; /* Ukuran menyusut yang presisi */
+        width: 5.5rem; 
     }
     .hide-on-collapse {
         transition: all 0.3s ease-in-out;

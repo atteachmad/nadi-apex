@@ -16,37 +16,30 @@
 </head>
 <body class="flex h-screen w-full text-gray-800 overflow-hidden">
 
-    <!-- SIDEBAR OVERLAY (Hanya terlihat di Mobile) -->
+    <!-- SIDEBAR OVERLAY -->
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden transition-opacity md:hidden"></div>
 
     <!-- SIDEBAR -->
     <aside id="sidebar" class="bg-nadi-blue text-white flex flex-col shadow-xl z-40 fixed inset-y-0 left-0 -translate-x-full md:relative md:translate-x-0 h-screen flex-shrink-0 transition-transform duration-300 md:transition-none w-64">
         
-        <!-- Header Sidebar -->
         <div class="header-container p-5 border-b border-blue-800 flex items-center justify-between min-h-[5.5rem] relative">
             <div class="hide-on-collapse brand-text flex-1 flex flex-col justify-center overflow-hidden mr-2">
                 <h1 class="text-2xl font-bold tracking-wider"><span class="text-nadi-red">Nadi</span>X-Bot</h1>
                 <p class="text-[10px] text-blue-200 mt-1 truncate">Enterprise Data Engineering</p>
             </div>
-            
             <div class="hidden md:block btn-wrapper relative group flex-shrink-0 transition-all duration-300">
                 <button onclick="toggleSidebar()" class="text-blue-200 hover:text-white transition-colors focus:outline-none p-2 rounded-lg hover:bg-blue-800 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="9" y1="3" x2="9" y2="21"></line>
-                    </svg>
+                    <i class="fas fa-bars text-lg"></i>
                 </button>
                 <div id="desktop-tooltip" class="absolute top-1/2 -translate-y-1/2 left-full ml-4 bg-gray-800 text-white font-semibold text-xs px-3 py-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-gray-600 z-[100] whitespace-nowrap">
                     Tutup Sidebar
                 </div>
             </div>
-
             <button onclick="toggleSidebar()" class="absolute top-4 right-4 text-blue-200 hover:text-white transition md:hidden">
                 <i class="fas fa-times text-xl"></i>
             </button>
         </div>
 
-        <!-- Menu Navigasi -->
         <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
             <button onclick="switchTab('splitter')" id="btn-splitter" class="menu-btn w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
                 <i class="fas fa-cut w-6 text-center text-lg flex-shrink-0"></i>
@@ -64,13 +57,10 @@
                 <i class="fas fa-microphone-alt w-6 text-center text-lg flex-shrink-0"></i>
                 <span class="hide-on-collapse ml-3">Audio & Text</span>
             </button>
-            
-            <!-- TOMBOL BARU: MAPS SCRAPER -->
             <button onclick="switchTab('gmaps')" id="btn-gmaps" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
                 <i class="fas fa-map-marked-alt w-6 text-center text-lg flex-shrink-0"></i>
                 <span class="hide-on-collapse ml-3">Maps Scraper</span>
             </button>
-            
             <button onclick="switchTab('about')" id="btn-about" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
                 <i class="fas fa-book w-6 text-center text-lg flex-shrink-0"></i>
                 <span class="hide-on-collapse ml-3">Panduan & About</span>
@@ -86,13 +76,10 @@
         </div>
     </aside>
 
-    <!-- MAIN CONTENT AREA -->
     <main class="flex-1 flex flex-col h-screen overflow-hidden bg-nadi-light relative min-w-0">
-        
-        <!-- HEADER UTAMA -->
         <header class="bg-white shadow-sm h-16 flex items-center px-4 md:px-8 justify-between z-10 flex-shrink-0 w-full sticky top-0">
             <div class="flex items-center">
-                <button onclick="toggleSidebar()" class="md:hidden text-nadi-blue focus:outline-none mr-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition flex items-center bg-gray-50 border border-gray-200 shadow-sm" title="Buka Sidebar">
+                <button onclick="toggleSidebar()" class="md:hidden text-nadi-blue focus:outline-none mr-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition flex items-center bg-gray-50 border border-gray-200 shadow-sm">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
                 <h2 class="text-base md:text-xl font-semibold text-gray-700 truncate" id="header-title">Data Splitter (Auto Kategorisasi)</h2>
@@ -104,7 +91,6 @@
             </div>
         </header>
 
-        <!-- SCROLLABLE CONTENT -->
         <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
             
             <!-- TAB: SPLITTER -->
@@ -112,16 +98,14 @@
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
                         <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-file-export"></i> Split Data</h3>
-                        <p class="text-sm text-gray-500 mt-2">Memisahkan file hasil apex berdasarkan Kolom CODING. Tarik file ke kotak di bawah atau klik untuk memilih.</p>
+                        <p class="text-sm text-gray-500 mt-2">Memisahkan file hasil apex berdasarkan Kolom CODING.</p>
                     </div>
-                    
                     <div id="dropzone-split" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-10 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                         <input type="file" id="split-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('split-files', 'split-label')">
-                        <label for="split-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm md:text-base w-full md:w-auto">Pilih / Tarik File Kesini</label>
+                        <label for="split-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm w-full md:w-auto">Pilih / Tarik File Kesini</label>
                         <p id="split-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
-
                     <div class="mt-4">
                         <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
                         <select id="split-format" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
@@ -129,11 +113,9 @@
                             <option value="xlsx">Excel / XLSX</option>
                         </select>
                     </div>
-
                     <button onclick="startSplit()" id="btn-run-split" class="mt-6 w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition flex items-center justify-center">
                         <i class="fas fa-play mr-2"></i> Eksekusi Pemisahan
                     </button>
-                    
                     <div id="split-progress-container" class="mt-6 hidden">
                         <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
                             <span id="split-status">Memproses file...</span>
@@ -153,14 +135,12 @@
                         <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-layer-group"></i> Split by Rows</h3>
                         <p class="text-sm text-gray-500 mt-2">Pecah 1 file besar menjadi beberapa file kecil berdasarkan jumlah baris.</p>
                     </div>
-                    
                     <div id="dropzone-row" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-10 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                         <input type="file" id="row-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('row-files', 'row-label')">
-                        <label for="row-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm md:text-base w-full md:w-auto">Pilih / Tarik File Kesini</label>
+                        <label for="row-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm w-full md:w-auto">Pilih / Tarik File Kesini</label>
                         <p id="row-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
-                    
                     <div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Potong per baris:</label>
@@ -174,11 +154,9 @@
                             </select>
                         </div>
                     </div>
-
                     <button onclick="startRowSplit()" id="btn-run-row" class="mt-6 w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-blue-700 transition flex items-center justify-center">
                         <i class="fas fa-cut mr-2"></i> Potong File
                     </button>
-                    
                     <div id="row-progress-container" class="mt-6 hidden">
                         <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
                             <span id="row-status">Memotong data...</span>
@@ -198,14 +176,12 @@
                         <h3 class="text-lg font-bold text-nadi-blue border-b pb-2"><i class="fas fa-compress-arrows-alt"></i> Data Merger</h3>
                         <p class="text-sm text-gray-500 mt-2">Gabungkan ratusan file CSV/XLSX menjadi satu file utuh.</p>
                     </div>
-                    
                     <div id="dropzone-merge" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-10 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
                         <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                         <input type="file" id="merge-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('merge-files', 'merge-label')">
-                        <label for="merge-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm md:text-base w-full md:w-auto">Pilih / Tarik Banyak File Kesini</label>
+                        <label for="merge-files" class="bg-nadi-blue text-white px-4 md:px-6 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm w-full md:w-auto">Pilih / Tarik Banyak File Kesini</label>
                         <p id="merge-label" class="mt-3 text-xs md:text-sm font-bold text-gray-600 break-words w-full">Belum ada file yang dipilih</p>
                     </div>
-                    
                     <div class="mt-4 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
                         <div class="flex-1">
                             <label class="block text-sm font-bold text-gray-700 mb-1">Format Output:</label>
@@ -219,17 +195,14 @@
                             <input type="text" id="merge-filename" value="Data_Gabungan" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
                         </div>
                     </div>
-                    
                     <div class="mt-4">
                         <label class="block text-sm font-bold text-gray-700 mb-1">Hapus Duplikat Berdasarkan Kolom (Opsional):</label>
-                        <input type="text" id="merge-duplicate-col" placeholder="Contoh: AWB, NAMA, atau NO_RESI (Kosongkan jika tidak perlu)" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
-                        <p class="text-[11px] text-gray-500 mt-1"><i class="fas fa-info-circle"></i> Sistem akan menghapus baris yang ganda pada kolom ini. Kosongkan jika ingin menggabung semua data.</p>
+                        <input type="text" id="merge-duplicate-col" placeholder="Contoh: AWB, NAMA, atau NO_RESI" class="w-full p-2 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue">
+                        <p class="text-[11px] text-gray-500 mt-1"><i class="fas fa-info-circle"></i> Sistem akan menghapus baris yang ganda pada kolom ini.</p>
                     </div>
-
                     <button onclick="startMerge()" id="btn-run-merge" class="mt-6 w-full bg-nadi-red text-white font-bold py-3 rounded-lg shadow-md hover:bg-red-800 transition flex items-center justify-center">
                         <i class="fas fa-link mr-2"></i> Gabungkan File
                     </button>
-                    
                     <div id="merge-progress-container" class="mt-6 hidden">
                         <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
                             <span id="merge-status">Menggabungkan data...</span>
@@ -245,17 +218,13 @@
             <!-- TAB: AUDIO & TEXT -->
             <div id="tab-audiotext" class="tab-content max-w-6xl mx-auto">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-auto">
-                    
-                    <!-- AUDIO TO TEXT CARD -->
                     <div class="bg-white p-5 md:p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col">
                         <div class="flex justify-between items-center border-b pb-2 mb-4">
                             <h3 class="text-lg font-bold text-nadi-blue"><i class="fas fa-microphone-alt"></i> Audio to Text</h3>
                             <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Autosaved</span>
                         </div>
                         <p class="text-sm text-gray-500 mb-3">Ubah suara ke teks (Text tidak hilang saat ter-refresh).</p>
-                        
                         <textarea id="stt-result" class="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-nadi-blue focus:border-nadi-blue resize-none min-h-[200px] md:min-h-[250px] custom-scrollbar text-gray-700" placeholder="Mulai merekam, atau ketik manual di sini..."></textarea>
-                        
                         <div class="mt-4 flex flex-col space-y-3">
                             <div class="flex space-x-2">
                                 <button id="btn-stt-toggle" class="bg-nadi-blue text-white px-4 py-3 rounded shadow hover:bg-blue-800 flex-1 font-bold transition duration-300 flex justify-center items-center text-sm md:text-base">
@@ -276,15 +245,12 @@
                         </div>
                     </div>
 
-                    <!-- TEXT TO AUDIO CARD -->
                     <div class="bg-white p-5 md:p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col">
                         <div class="border-b pb-2 mb-4">
                             <h3 class="text-lg font-bold text-nadi-blue"><i class="fas fa-volume-up"></i> Text to Audio</h3>
                         </div>
                         <p class="text-sm text-gray-500 mb-3">Ketik/paste teks di bawah untuk dibacakan oleh sistem.</p>
-                        
                         <textarea id="tts-input" class="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-nadi-blue focus:border-nadi-blue resize-none min-h-[200px] md:min-h-[250px] custom-scrollbar text-gray-700" placeholder="Ketik atau paste teks di sini untuk dibacakan..."></textarea>
-                        
                         <div class="mt-4 flex flex-col space-y-3">
                             <div class="flex items-center space-x-2">
                                 <label class="text-sm font-bold text-gray-700 w-16">Bahasa:</label>
@@ -303,11 +269,10 @@
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            <!-- TAB BARU: GOOGLE MAPS SCRAPER KUSTOM -->
+            <!-- TAB: MAPS SCRAPER KUSTOM -->
             <div id="tab-gmaps" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-3 gap-4">
@@ -320,7 +285,6 @@
                         </button>
                     </div>
                     
-                    <!-- Dropzone File Upload -->
                     <div id="dropzone-gmaps" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
                         <i class="fas fa-cloud-upload-alt text-4xl text-nadi-blue mb-3"></i>
                         <input type="file" id="gmaps-files" accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('gmaps-files', 'gmaps-label')">
@@ -328,7 +292,6 @@
                         <p id="gmaps-label" class="mt-2 text-xs font-bold text-gray-600">Belum ada file yang dipilih</p>
                     </div>
 
-                    <!-- Opsi Centang Kustom Data yang Ingin Diambil -->
                     <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
                         <label class="block text-sm font-bold text-gray-800 mb-3"><i class="fas fa-tasks text-nadi-red mr-1"></i> Pilih Data yang Ingin Ditarik/Dilengkapi:</label>
                         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs font-semibold text-gray-700">
@@ -344,11 +307,11 @@
                                 <input type="checkbox" id="opt-address" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
                                 <span>Alamat Lengkap</span>
                             </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60" title="Review diblokir oleh sistem keamanan browser">
+                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60">
                                 <input type="checkbox" id="opt-rating" checked disabled class="rounded text-gray-400"> 
                                 <span>Rating Google</span>
                             </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60" title="Review diblokir oleh sistem keamanan browser">
+                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60">
                                 <input type="checkbox" id="opt-reviews" checked disabled class="rounded text-gray-400"> 
                                 <span>Jumlah Ulasan</span>
                             </label>
@@ -363,12 +326,10 @@
                         </div>
                     </div>
 
-                    <!-- Tombol Eksekusi -->
                     <button onclick="startCustomMapsScraper()" id="btn-run-custom-gmaps" class="mt-6 w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition flex items-center justify-center">
                         <i class="fas fa-play mr-2"></i> Eksekusi Pemetaan Data
                     </button>
                     
-                    <!-- Live Terminal Progress Console -->
                     <div id="gmaps-progress-container" class="mt-6 hidden">
                         <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
                             <span id="gmaps-status">Mempersiapkan sistem pembaca data...</span>
@@ -388,30 +349,33 @@
             <div id="tab-about" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
                     <h3 class="text-xl md:text-2xl font-bold text-nadi-blue border-b pb-2">Panduan Penggunaan</h3>
-                    
                     <div>
                         <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-cut text-nadi-blue mr-2"></i> 1. Data Splitter</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
-                            <li>Memisahkan file hasil apex berdasarkan kolom <b>CODING</b>.</li>
+                            <li>Memisahkan file hasil apex berdasarkan kolom <b>CODING</b> (Open, Closed, Return, Claim)[cite: 6].</li>
                         </ul>
                     </div>
-                    
                     <div>
                         <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-layer-group text-nadi-blue mr-2"></i> 2. Split by Rows</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
-                            <li>Memecah file besar menjadi file kecil berdasarkan jumlah baris.</li>
+                            <li>Memecah file besar menjadi file kecil berdasarkan jumlah baris[cite: 6].</li>
                         </ul>
                     </div>
-
                     <div>
                         <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-object-group text-nadi-red mr-2"></i> 3. Data Merger</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
-                            <li>Menggabungkan ratusan file CSV/Excel menjadi satu file utuh.</li>
+                            <li>Menggabungkan ratusan file CSV/Excel menjadi satu file utuh[cite: 6].</li>
                         </ul>
                     </div>
-                    
                     <div>
-                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-map-marked-alt text-nadi-blue mr-2"></i> 4. Maps Scraper</h4>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-microphone-alt text-green-600 mr-2"></i> 4. Audio & Text</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                            <li><b>Audio to Text:</b> Otomatis mendeteksi ucapan dan merubah ke teks[cite: 6].</li>
+                            <li><b>Text to Audio:</b> Membaca teks dengan intonasi natural pilihan bahasa[cite: 6].</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-map-marked-alt text-nadi-blue mr-2"></i> 5. Maps Scraper</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
                             <li>Otomatis melengkapi data Google Maps (Lat/Long, Alamat) secara massal dari koordinat atau nama tempat via OpenStreetMap API.</li>
                         </ul>
@@ -420,7 +384,7 @@
             </div>
 
             <!-- TAB: PROFILE -->
-            <div id="tab-profile" class="tab-content max-w-3xl mx-auto">
+            <div id="tab-profile" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
                     <div class="bg-gradient-to-r from-nadi-blue to-blue-900 h-24 md:h-32 relative"></div>
                     <div class="px-4 md:px-8 pb-8 flex flex-col items-center -mt-12 md:-mt-16 relative z-10">
@@ -430,19 +394,61 @@
                         <h2 class="text-2xl md:text-3xl font-bold text-gray-800 mt-4 text-center">Achmad Taufik</h2>
                         <p class="text-blue-600 font-semibold tracking-wide text-sm md:text-base text-center">Data Engineer & System Analyst</p>
                         
-                        <div class="w-full mt-6 md:mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="w-full mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <!-- Email Pribadi -->
                             <a href="mailto:atte.achmad@gmail.com" class="flex md:flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
                                 <i class="fas fa-envelope text-2xl text-blue-600 md:mb-2 mr-4 md:mr-0"></i>
-                                <div class="flex flex-col md:items-center w-full">
+                                <div class="flex flex-col md:items-center w-full min-w-0">
                                     <span class="text-sm font-bold text-gray-700">Email Pribadi</span>
-                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left md:text-center">atte.achmad@gmail.com</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">atte.achmad@gmail.com</span>
                                 </div>
                             </a>
+                            <!-- Email Corporate -->
                             <a href="mailto:achmad.taufik@nadi.co.id" class="flex md:flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
                                 <i class="fas fa-briefcase text-2xl text-nadi-blue md:mb-2 mr-4 md:mr-0"></i>
-                                <div class="flex flex-col md:items-center w-full">
-                                    <span class="text-sm font-bold text-gray-700">Email Corporate</span>
-                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left md:text-center">achmad.taufik@nadi.co.id</span>
+                                <div class="flex flex-col md:items-center w-full min-w-0">
+                                    <span class="text-sm font-bold text-gray-700">Email Corp</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">achmad.taufik@nadi.co.id</span>
+                                </div>
+                            </a>
+                            <!-- WhatsApp -->
+                            <a href="https://wa.me/6285779300030" target="_blank" class="flex md:flex-col items-center p-4 bg-green-50 rounded-lg border border-green-200 hover:border-green-400 hover:shadow-md transition">
+                                <i class="fab fa-whatsapp text-2xl text-green-600 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full min-w-0">
+                                    <span class="text-sm font-bold text-gray-700">WhatsApp</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">085779300030</span>
+                                </div>
+                            </a>
+                            <!-- Instagram -->
+                            <a href="https://www.instagram.com/atteachmadtaufik/" target="_blank" class="flex md:flex-col items-center p-4 bg-pink-50 rounded-lg border border-pink-200 hover:border-pink-400 hover:shadow-md transition">
+                                <i class="fab fa-instagram text-2xl text-pink-600 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full min-w-0">
+                                    <span class="text-sm font-bold text-gray-700">Instagram</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">@atteachmadtaufik</span>
+                                </div>
+                            </a>
+                            <!-- Threads -->
+                            <a href="https://www.threads.com/@atteachmadtaufik" target="_blank" class="flex md:flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-gray-500 hover:shadow-md transition">
+                                <i class="fa-brands fa-threads text-2xl text-gray-900 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full min-w-0">
+                                    <span class="text-sm font-bold text-gray-700">Threads</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">@atteachmadtaufik</span>
+                                </div>
+                            </a>
+                            <!-- Facebook -->
+                            <a href="https://www.facebook.com/rajeeb.raval/" target="_blank" class="flex md:flex-col items-center p-4 bg-blue-50 rounded-lg border border-blue-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fab fa-facebook text-2xl text-blue-600 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full min-w-0">
+                                    <span class="text-sm font-bold text-gray-700">Facebook</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">Achmad Taufik</span>
+                                </div>
+                            </a>
+                            <!-- LinkedIn -->
+                            <a href="https://www.linkedin.com/in/achmad-taufik-52b172413/" target="_blank" class="flex md:flex-col items-center p-4 bg-blue-50 rounded-lg border border-blue-200 hover:border-blue-400 hover:shadow-md transition">
+                                <i class="fab fa-linkedin text-2xl text-blue-700 md:mb-2 mr-4 md:mr-0"></i>
+                                <div class="flex flex-col md:items-center w-full min-w-0">
+                                    <span class="text-sm font-bold text-gray-700">LinkedIn</span>
+                                    <span class="text-xs text-gray-500 md:text-center truncate w-full text-left">Achmad Taufik</span>
                                 </div>
                             </a>
                         </div>

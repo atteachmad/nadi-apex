@@ -49,6 +49,7 @@ function switchTab(tabId) {
         'rowsplitter': 'Split by Rows (Potong Baris)',
         'merger': 'Data Merger (Penggabung Cepat)',
         'audiotext': 'Audio & Text Converter',
+        'gmaps': 'Custom Maps Mass Scraper', // Title baru untuk maps scraper
         'about': 'Panduan Penggunaan',
         'profile': 'Profil Kreator'
     };
@@ -75,6 +76,8 @@ function setupDropzone(zoneId, inputId, labelId) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     
+    if(!zone || !input) return; // Mencegah error jika elemen tidak ada di halaman
+
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
     zone.addEventListener('dragleave', e => { e.preventDefault(); zone.classList.remove('dragover'); });
     zone.addEventListener('drop', e => {
@@ -92,9 +95,11 @@ function setupDropzone(zoneId, inputId, labelId) {
     });
 }
 
+// Menjalankan event listener dropzone
 setupDropzone('dropzone-split', 'split-files', 'split-label');
 setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
+setupDropzone('dropzone-gmaps', 'gmaps-files', 'gmaps-label'); // Setup baru untuk maps scraper
 
 const MAX_MB = 500;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
@@ -418,16 +423,21 @@ window.addEventListener('DOMContentLoaded', () => {
     if(savedText) sttTextarea.value = savedText;
 });
 
-sttTextarea.addEventListener('input', () => {
-    localStorage.setItem('nadi_stt_text', sttTextarea.value);
-});
+if(sttTextarea) {
+    sttTextarea.addEventListener('input', () => {
+        localStorage.setItem('nadi_stt_text', sttTextarea.value);
+    });
+}
 
-document.getElementById('btn-stt-clear').addEventListener('click', () => {
-    if(confirm('Yakin ingin menghapus semua teks?')) {
-        sttTextarea.value = '';
-        localStorage.removeItem('nadi_stt_text');
-    }
-});
+const btnClearSTT = document.getElementById('btn-stt-clear');
+if(btnClearSTT) {
+    btnClearSTT.addEventListener('click', () => {
+        if(confirm('Yakin ingin menghapus semua teks?')) {
+            sttTextarea.value = '';
+            localStorage.removeItem('nadi_stt_text');
+        }
+    });
+}
 
 let recognition;
 let isRecording = false;
@@ -476,29 +486,33 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         }
     };
 } else {
-    sttBtnToggle.disabled = true;
-    sttBtnToggle.classList.replace('bg-nadi-blue', 'bg-gray-400');
-    sttBtnText.innerText = "Browser Tidak Support Mic";
+    if(sttBtnToggle) {
+        sttBtnToggle.disabled = true;
+        sttBtnToggle.classList.replace('bg-nadi-blue', 'bg-gray-400');
+        sttBtnText.innerText = "Browser Tidak Support Mic";
+    }
 }
 
 function stopRecordingUI() {
     isRecording = false;
-    sttBtnText.innerText = "Mulai Merekam";
-    sttBtnToggle.classList.remove('recording-active');
-    sttIcon.classList.replace('fa-stop-circle', 'fa-microphone');
+    if(sttBtnText) sttBtnText.innerText = "Mulai Merekam";
+    if(sttBtnToggle) sttBtnToggle.classList.remove('recording-active');
+    if(sttIcon) sttIcon.classList.replace('fa-stop-circle', 'fa-microphone');
 }
 
-sttBtnToggle.addEventListener('click', () => {
-    if(!recognition) return alert('Fitur ini tidak didukung di browser Anda. Gunakan Google Chrome versi terbaru.');
-    
-    if(isRecording) {
-        isRecording = false;
-        recognition.stop();
-        stopRecordingUI();
-    } else {
-        try { recognition.start(); } catch(e) { console.log(e); }
-    }
-});
+if(sttBtnToggle) {
+    sttBtnToggle.addEventListener('click', () => {
+        if(!recognition) return alert('Fitur ini tidak didukung di browser Anda. Gunakan Google Chrome versi terbaru.');
+        
+        if(isRecording) {
+            isRecording = false;
+            recognition.stop();
+            stopRecordingUI();
+        } else {
+            try { recognition.start(); } catch(e) { console.log(e); }
+        }
+    });
+}
 
 function saveAudioText(type) {
     const text = sttTextarea.value.trim();
@@ -528,26 +542,148 @@ const btnTtsPlay = document.getElementById('btn-tts-play');
 const btnTtsStop = document.getElementById('btn-tts-stop');
 const ttsLang = document.getElementById('tts-lang');
 
-btnTtsPlay.addEventListener('click', () => {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+if(btnTtsPlay) {
+    btnTtsPlay.addEventListener('click', () => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            
+            const text = ttsInput.value.trim();
+            if(!text) return alert('Ketikkan teks terlebih dahulu!');
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = ttsLang.value;
+            utterance.rate = 0.95; 
+            utterance.pitch = 1;
+
+            window.speechSynthesis.speak(utterance);
+        } else {
+            alert("Browser Anda tidak mendukung fitur Text to Audio.");
+        }
+    });
+}
+
+if(btnTtsStop) {
+    btnTtsStop.addEventListener('click', () => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+    });
+}
+
+// --- 7. GOOGLE MAPS SCRAPER LOGIC ---
+
+// Fungsi Download Template Kustom
+function downloadCustomGmapsTemplate() {
+    const templateData = [
+        ["DATA_INPUT_UTAMA"],
+        ["JNE Express Tomang Raya Jakarta"],
+        ["-6.175392, 106.827153"],
+        ["Jl. Asia Afrika Bandung"]
+    ];
+    
+    // Memanfaatkan API XLSX yang sudah diload dari sheetjs
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
+    
+    // Menambahkan styling lebar kolom
+    ws['!cols'] = [{ width: 45 }]; 
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Input_Data");
+    XLSX.writeFile(wb, "Nadi_Template_Maps_Scraper.xlsx");
+}
+
+// Fungsi Utama Simulasi API / Frontend 
+async function startCustomMapsScraper() {
+    const fileInput = document.getElementById('gmaps-files');
+    if (fileInput.files.length === 0) {
+        return alert('Silakan unggah file Excel/CSV terlebih dahulu!');
+    }
+
+    // Mengambil nilai Checkbox
+    const options = {
+        name: document.getElementById('opt-name').checked,
+        latlong: document.getElementById('opt-latlong').checked,
+        address: document.getElementById('opt-address').checked,
+        rating: document.getElementById('opt-rating').checked,
+        reviews: document.getElementById('opt-reviews').checked,
+        phone: document.getElementById('opt-phone').checked,
+        url: document.getElementById('opt-url').checked,
+    };
+
+    const file = fileInput.files[0];
+    const btn = document.getElementById('btn-run-custom-gmaps');
+    const progCont = document.getElementById('gmaps-progress-container');
+    const progBar = document.getElementById('gmaps-progress-bar');
+    const progStatus = document.getElementById('gmaps-status');
+    const logBox = document.getElementById('gmaps-log');
+
+    // Reset UI State
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+    progCont.classList.remove('hidden');
+    progBar.style.width = '0%';
+    
+    // Helper fungsi print log terminal
+    const printLog = (text, type = "INFO") => {
+        let color = type === "ERROR" ? "text-red-400" : (type === "WARN" ? "text-yellow-400" : "text-green-400");
+        logBox.innerHTML += `<span class="${color}">[${type}] ${text}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    logBox.innerHTML = '';
+    printLog(`Mempersiapkan Payload dari file: ${file.name}...`);
+    printLog(`Konfigurasi target: ${Object.keys(options).filter(k => options[k]).join(', ')}`);
+
+    // ================================================================
+    // BLOK SIMULASI FRONTEND (GANTIKAN DENGAN FETCH() API PYTHON ANDA NANTI)
+    // ================================================================
+    printLog(`Memulai Koneksi WebSocket / API Cloud Worker...`, "SYSTEM");
+    
+    let progress = 0;
+    let currentRow = 0;
+    const totalSimulatedRows = 550; // Anggaplah ada 550 data di excel
+    
+    const interval = setInterval(() => {
+        // Simulasi penambahan row yang berproses
+        currentRow += Math.floor(Math.random() * 45) + 15; // Proses 15-60 baris tiap tik
+        if(currentRow > totalSimulatedRows) currentRow = totalSimulatedRows;
         
-        const text = ttsInput.value.trim();
-        if(!text) return alert('Ketikkan teks terlebih dahulu!');
+        progress = Math.round((currentRow / totalSimulatedRows) * 100);
+        
+        // Update UI
+        progBar.style.width = progress + '%';
+        document.getElementById('gmaps-percent').innerText = progress + '%';
+        progStatus.innerText = `Menyelam Data Maps (${currentRow}/${totalSimulatedRows})...`;
+        
+        // Memunculkan log virtual yang realistis
+        if(progress < 100) {
+            printLog(`Memproses batch baris ${currentRow} melalui headless browser...`);
+        }
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = ttsLang.value;
-        utterance.rate = 0.95; 
-        utterance.pitch = 1;
+        if (progress >= 100) {
+            clearInterval(interval);
+            progStatus.innerText = "Selesai! Menyusun file akhir...";
+            printLog(`Sistem selesai memproses ${totalSimulatedRows} baris.`, "SUCCESS");
+            
+            // Catatan Pengingat Untuk Developer (Anda)
+            printLog(`<br>=====================================<br>`, "WARN");
+            printLog(`CATATAN DEVELOPER UNTUK A OPIK:`, "WARN");
+            printLog(`Bagian interval ini adalah Mockup / Simulasi. Untuk menghubungkan ke Python FastAPI yang asli gunakan syntax:`, "WARN");
+            printLog(`fetch('https://URL_API_PYTHON_ANDA.com/scrape', { method: 'POST', body: formData })`, "WARN");
+            printLog(`Lalu baca stream response-nya untuk mengupdate log ini secara realtime.`, "WARN");
+            printLog(`=====================================<br>`, "WARN");
 
-        window.speechSynthesis.speak(utterance);
-    } else {
-        alert("Browser Anda tidak mendukung fitur Text to Audio.");
-    }
-});
-
-btnTtsStop.addEventListener('click', () => {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-    }
-});
+            // Mockup auto-download (Menggunakan data dummy kosong)
+            setTimeout(() => {
+                printLog(`Mengunduh file Excel hasil scraping...`);
+                exportData([["DATA_INPUT_UTAMA", "HASIL_NAMA", "HASIL_LATLONG", "HASIL_ALAMAT"]], 'xlsx', `Nadi_Scraper_Hasil_${new Date().getTime()}`);
+                
+                // Kembalikan tombol ke semula
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                progStatus.innerText = "Selesai! File berhasil diunduh.";
+            }, 2000);
+        }
+    }, 800);
+    // ================================================================
+}

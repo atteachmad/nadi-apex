@@ -64,6 +64,13 @@
                 <i class="fas fa-microphone-alt w-6 text-center text-lg flex-shrink-0"></i>
                 <span class="hide-on-collapse ml-3">Audio & Text</span>
             </button>
+            
+            <!-- TOMBOL BARU: MAPS SCRAPER -->
+            <button onclick="switchTab('gmaps')" id="btn-gmaps" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+                <i class="fas fa-map-marked-alt w-6 text-center text-lg flex-shrink-0"></i>
+                <span class="hide-on-collapse ml-3">Maps Scraper</span>
+            </button>
+            
             <button onclick="switchTab('about')" id="btn-about" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
                 <i class="fas fa-book w-6 text-center text-lg flex-shrink-0"></i>
                 <span class="hide-on-collapse ml-3">Panduan & About</span>
@@ -300,6 +307,83 @@
                 </div>
             </div>
 
+            <!-- TAB BARU: GOOGLE MAPS SCRAPER KUSTOM -->
+            <div id="tab-gmaps" class="tab-content max-w-4xl mx-auto">
+                <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
+                    <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-3 gap-4">
+                        <div>
+                            <h3 class="text-lg font-bold text-nadi-blue"><i class="fas fa-map-marked-alt"></i> Custom Maps Mass Scraper</h3>
+                            <p class="text-sm text-gray-500 mt-1">Upload jutaan data, pilih parameter kustom, biarkan server memproses secara otomatis.</p>
+                        </div>
+                        <button onclick="downloadCustomGmapsTemplate()" class="bg-gray-100 text-nadi-blue px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-200 transition text-xs font-bold flex items-center whitespace-nowrap shadow-sm">
+                            <i class="fas fa-file-excel mr-2 text-green-600"></i> Unduh Template Excel
+                        </button>
+                    </div>
+                    
+                    <!-- Dropzone File Upload -->
+                    <div id="dropzone-gmaps" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-nadi-blue mb-3"></i>
+                        <input type="file" id="gmaps-files" accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('gmaps-files', 'gmaps-label')">
+                        <label for="gmaps-files" class="bg-nadi-blue text-white px-5 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm font-semibold">Pilih atau Tarik File Input Disini</label>
+                        <p id="gmaps-label" class="mt-2 text-xs font-bold text-gray-600">Belum ada file yang dipilih</p>
+                    </div>
+
+                    <!-- Opsi Centang Kustom Data yang Ingin Diambil -->
+                    <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 shadow-inner">
+                        <label class="block text-sm font-bold text-gray-800 mb-3"><i class="fas fa-tasks text-nadi-red mr-1"></i> Pilih Data yang Ingin Ditarik/Dilengkapi:</label>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs font-semibold text-gray-700">
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
+                                <input type="checkbox" id="opt-name" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>Nama Tempat</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
+                                <input type="checkbox" id="opt-latlong" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>Latitude & Longitude</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
+                                <input type="checkbox" id="opt-address" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>Alamat Lengkap</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
+                                <input type="checkbox" id="opt-rating" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>Rating Google</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
+                                <input type="checkbox" id="opt-reviews" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>Jumlah Ulasan</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
+                                <input type="checkbox" id="opt-phone" class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>No Telepon</span>
+                            </label>
+                            <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm col-span-2 md:col-span-3">
+                                <input type="checkbox" id="opt-url" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
+                                <span>Alamat URL Web Maps</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Tombol Eksekusi -->
+                    <button onclick="startCustomMapsScraper()" id="btn-run-custom-gmaps" class="mt-6 w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition flex items-center justify-center">
+                        <i class="fas fa-play mr-2"></i> Jalankan Mass Scraper Otomatis
+                    </button>
+                    
+                    <!-- Live Terminal Progress Console -->
+                    <div id="gmaps-progress-container" class="mt-6 hidden">
+                        <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
+                            <span id="gmaps-status">Menginisialisasi engine cloud...</span>
+                            <span id="gmaps-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3 mb-3">
+                            <div id="gmaps-progress-bar" class="bg-nadi-blue h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <div id="gmaps-log" class="bg-gray-900 text-green-400 font-mono text-xs p-3 rounded-lg h-40 overflow-y-auto custom-scrollbar">
+                            [SYSTEM] Waiting for user payload...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- TAB: ABOUT -->
             <div id="tab-about" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
@@ -326,9 +410,16 @@
                             <li>Menumpuk/ menggabungkan ratusan file CSV/Excel menjadi satu file secara cepat dan otomatis.</li>
                         </ul>
                     </div>
+                    
+                    <div>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-map-marked-alt text-nadi-blue mr-2"></i> 4. Maps Scraper</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                            <li>Otomatis melengkapi data Google Maps secara massal dari koordinat atau nama tempat.</li>
+                        </ul>
+                    </div>
 
                     <div>
-                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-microphone-alt text-green-600 mr-2"></i> 4. Audio & Text</h4>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-microphone-alt text-green-600 mr-2"></i> 5. Audio & Text</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
                             <li><b>Audio to Text:</b> Otomatis mendeteksi ucapan dan merubah ke teks.</li>
                             <li><b>Text to Audio:</b> Membaca teks dengan intonasi natural pilihan bahasa.</li>

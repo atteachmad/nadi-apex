@@ -76,7 +76,6 @@ function setupDropzone(zoneId, inputId, labelId) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     
-    // Proteksi error jika element tidak ditemukan di HTML (Mencegah tombol mati)
     if(!zone || !input) return;
 
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
@@ -96,7 +95,6 @@ function setupDropzone(zoneId, inputId, labelId) {
     });
 }
 
-// Inisialisasi Dropzone yang aman
 setupDropzone('dropzone-split', 'split-files', 'split-label');
 setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
@@ -572,17 +570,16 @@ if(btnTtsStop) {
     });
 }
 
-
 // --- 7. GOOGLE MAPS SCRAPER LOGIC (CLIENT-SIDE SERVERLESS) ---
 
-// Fungsi Download Template Kustom yang Aman (Telah Dibenarkan)
+// Fungsi Download Template Kustom yang Aman
 function downloadCustomGmapsTemplate() {
     try {
         const templateData = [
             ["DATA_INPUT_UTAMA"],
             ["JNE Express Tomang Raya Jakarta"],
             ["-6.175392, 106.827153"],
-            ["Jl. Asia Afrika Bandung"]
+            ["Jl. Soekarno-Hatta No.829 Mekar Mulya Bandung"]
         ];
         
         const ws = XLSX.utils.aoa_to_sheet(templateData);
@@ -600,7 +597,7 @@ function downloadCustomGmapsTemplate() {
 // Helper Jeda Asinkronus agar browser tidak crash dan tidak diblokir API
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// Fungsi Utama Proses (Telah Dibebaskan dari Blokir)
+// Fungsi Utama Proses (Dilengkapi dengan Double-Engine API Fallback)
 async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');
     if (!fileInput || fileInput.files.length === 0) {
@@ -621,7 +618,6 @@ async function startCustomMapsScraper() {
     const progStatus = document.getElementById('gmaps-status');
     const logBox = document.getElementById('gmaps-log');
 
-    // Reset UI State
     btn.disabled = true;
     btn.classList.add('opacity-50');
     progCont.classList.remove('hidden');
@@ -637,7 +633,6 @@ async function startCustomMapsScraper() {
     printLog(`Mempersiapkan engine serverless lokal untuk: ${file.name}...`, "SYSTEM");
 
     try {
-        // 1. Membaca File via SheetJS di RAM Browser
         const dataArr = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -659,14 +654,12 @@ async function startCustomMapsScraper() {
         const totalRows = dataArr.length - 1;
         printLog(`Ditemukan ${totalRows} baris data. Memulai ekstraksi...`);
 
-        // 2. Persiapan Header Tabel Baru
         let finalData = [];
         let headerRow = ["DATA_INPUT_UTAMA"];
         if(options.name) headerRow.push("NAMA_TEMPAT");
         if(options.latlong) headerRow.push("LATITUDE_LONGITUDE");
         if(options.address) headerRow.push("ALAMAT_LENGKAP");
         
-        // Kolom statis (Protected) untuk menjaga format user
         headerRow.push("RATING", "JUMLAH_ULASAN", "NO_TELEPON"); 
         
         if(options.url) headerRow.push("URL_MAPS");
@@ -675,13 +668,11 @@ async function startCustomMapsScraper() {
         let needGeocoding = options.name || options.latlong || options.address;
 
         if (needGeocoding) {
-             printLog(`Mengaktifkan Public OpenStreetMap Geocoder (Bebas Biaya).`, "SYSTEM");
-             printLog(`Kecepatan dibatasi 1 detik per API untuk menghindari IP Block...`, "WARN");
+             printLog(`Mengaktifkan sistem pencarian cerdas ganda (OSM & ArcGIS)...`, "SYSTEM");
         } else {
              printLog(`Mode URL Only aktif. Pemrosesan berjalan kecepatan Super Cepat!`, "SYSTEM");
         }
 
-        // 3. Looping Proses Data dengan Chunking
         for(let i = 1; i <= totalRows; i++) {
             let row = dataArr[i];
             if(!row || row.length === 0 || !row[0]) continue;
@@ -691,9 +682,10 @@ async function startCustomMapsScraper() {
 
             let geoData = { name: "Tidak Ditemukan", latlon: "Tidak Ditemukan", address: "Tidak Ditemukan" };
 
-            // Ambil data Lat/Long dan alamat secara real-time via API Publik
+            // LOGIKA DOUBLE-ENGINE: Mencari koordinat alamat rumit secara akurat
             if (needGeocoding && inputQuery !== "") {
                 try {
+                    // MESIN 1: OpenStreetMap (Cocok untuk alamat pendek/kota)
                     let fetchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(inputQuery)}&format=json&limit=1`;
                     const res = await fetch(fetchUrl);
                     const geoJson = await res.json();
@@ -702,27 +694,35 @@ async function startCustomMapsScraper() {
                         geoData.address = geoJson[0].display_name;
                         geoData.latlon = `${geoJson[0].lat}, ${geoJson[0].lon}`;
                         geoData.name = geoJson[0].display_name.split(',')[0];
+                    } else {
+                        // MESIN 2 (FALLBACK): ArcGIS (Sangat pintar membaca format alamat panjang / rumit ala Google Maps)
+                        let arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(inputQuery)}&maxLocations=1`;
+                        const resArc = await fetch(arcgisUrl);
+                        const arcJson = await resArc.json();
+
+                        if (arcJson && arcJson.candidates && arcJson.candidates.length > 0) {
+                            let candidate = arcJson.candidates[0];
+                            geoData.address = candidate.address;
+                            geoData.latlon = `${candidate.location.y}, ${candidate.location.x}`;
+                            geoData.name = candidate.address.split(',')[0];
+                        }
                     }
                 } catch(e) {
-                    geoData.address = "Error fetching data";
+                    console.warn(`Gagal mencari koordinat untuk: ${inputQuery}`);
                 }
                 
-                // Wajib Jeda 1 detik agar browser tidak dianggap DDoS oleh API Publik
-                await delay(1100);
+                // Jeda aman untuk menghindari pemblokiran IP
+                await delay(1200);
             } else if (!needGeocoding && i % 1000 === 0) {
-                // Jeda mikro setiap 1000 baris agar browser tidak macet jika data jutaan
                 await delay(10); 
             }
 
-            // Memasukkan hasil tarikan
             if(options.name) newRow.push(geoData.name);
             if(options.latlong) newRow.push(geoData.latlon);
             if(options.address) newRow.push(geoData.address);
 
-            // Pengisian Default N/A untuk yang butuh proxy
             newRow.push("N/A (CORS Protected)", "N/A (CORS Protected)", "N/A (CORS Protected)");
 
-            // Merakit URL Pintar Google Maps
             if(options.url) {
                 let mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(inputQuery)}`;
                 newRow.push(mapsUrl);
@@ -730,20 +730,18 @@ async function startCustomMapsScraper() {
 
             finalData.push(newRow);
 
-            // Kalkulasi dan Animasi Progress
             let pct = Math.round((i / totalRows) * 100);
             progBar.style.width = pct + '%';
             document.getElementById('gmaps-percent').innerText = pct + '%';
             progStatus.innerText = `Menarik Data (${i}/${totalRows})...`;
 
             if(needGeocoding || i % 1000 === 0 || i === totalRows) {
-                printLog(`Sukses: ${inputQuery.substring(0, 30)}...`);
+                printLog(`Selesai: ${inputQuery.substring(0, 30)}...`);
             }
         }
 
-        printLog("Menyusun file Excel...", "SYSTEM");
+        printLog("Menyusun file Excel akhir...", "SYSTEM");
         
-        // 4. Proses Auto Download
         exportData(finalData, 'xlsx', `Nadi_Maps_Scraper_${new Date().getTime()}`);
 
         progStatus.innerText = "Selesai! File berhasil diunduh.";

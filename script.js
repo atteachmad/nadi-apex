@@ -49,7 +49,7 @@ function switchTab(tabId) {
         'rowsplitter': 'Split by Rows (Potong Baris)',
         'merger': 'Data Merger (Penggabung Cepat)',
         'audiotext': 'Audio & Text Converter',
-        'gmaps': 'Custom Maps Mass Scraper', // Title baru untuk maps scraper
+        'gmaps': 'Custom Maps Mass Scraper', 
         'about': 'Panduan Penggunaan',
         'profile': 'Profil Kreator'
     };
@@ -76,7 +76,7 @@ function setupDropzone(zoneId, inputId, labelId) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
     
-    if(!zone || !input) return; // Mencegah error jika elemen tidak ada di halaman
+    if(!zone || !input) return;
 
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
     zone.addEventListener('dragleave', e => { e.preventDefault(); zone.classList.remove('dragover'); });
@@ -95,11 +95,10 @@ function setupDropzone(zoneId, inputId, labelId) {
     });
 }
 
-// Menjalankan event listener dropzone
 setupDropzone('dropzone-split', 'split-files', 'split-label');
 setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
-setupDropzone('dropzone-gmaps', 'gmaps-files', 'gmaps-label'); // Setup baru untuk maps scraper
+setupDropzone('dropzone-gmaps', 'gmaps-files', 'gmaps-label'); 
 
 const MAX_MB = 500;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
@@ -570,7 +569,7 @@ if(btnTtsStop) {
     });
 }
 
-// --- 7. GOOGLE MAPS SCRAPER LOGIC ---
+// --- 7. GOOGLE MAPS SCRAPER LOGIC (CLIENT-SIDE SERVERLESS) ---
 
 // Fungsi Download Template Kustom
 function downloadCustomGmapsTemplate() {
@@ -581,10 +580,7 @@ function downloadCustomGmapsTemplate() {
         ["Jl. Asia Afrika Bandung"]
     ];
     
-    // Memanfaatkan API XLSX yang sudah diload dari sheetjs
     const ws = XLSX.utils.aoa_to_sheet(templateData);
-    
-    // Menambahkan styling lebar kolom
     ws['!cols'] = [{ width: 45 }]; 
     
     const wb = XLSX.utils.book_new();
@@ -592,21 +588,20 @@ function downloadCustomGmapsTemplate() {
     XLSX.writeFile(wb, "Nadi_Template_Maps_Scraper.xlsx");
 }
 
-// Fungsi Utama Simulasi API / Frontend 
+// Helper Jeda Asinkronus agar browser tidak crash dan tidak diblokir API
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+// Fungsi Utama Proses
 async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');
     if (fileInput.files.length === 0) {
         return alert('Silakan unggah file Excel/CSV terlebih dahulu!');
     }
 
-    // Mengambil nilai Checkbox
     const options = {
         name: document.getElementById('opt-name').checked,
         latlong: document.getElementById('opt-latlong').checked,
         address: document.getElementById('opt-address').checked,
-        rating: document.getElementById('opt-rating').checked,
-        reviews: document.getElementById('opt-reviews').checked,
-        phone: document.getElementById('opt-phone').checked,
         url: document.getElementById('opt-url').checked,
     };
 
@@ -623,67 +618,134 @@ async function startCustomMapsScraper() {
     progCont.classList.remove('hidden');
     progBar.style.width = '0%';
     
-    // Helper fungsi print log terminal
     const printLog = (text, type = "INFO") => {
-        let color = type === "ERROR" ? "text-red-400" : (type === "WARN" ? "text-yellow-400" : "text-green-400");
+        let color = type === "ERROR" ? "text-red-400" : (type === "WARN" ? "text-yellow-400" : (type === "SYSTEM" ? "text-blue-400" : "text-green-400"));
         logBox.innerHTML += `<span class="${color}">[${type}] ${text}</span><br>`;
         logBox.scrollTop = logBox.scrollHeight;
     };
 
     logBox.innerHTML = '';
-    printLog(`Mempersiapkan Payload dari file: ${file.name}...`);
-    printLog(`Konfigurasi target: ${Object.keys(options).filter(k => options[k]).join(', ')}`);
+    printLog(`Mempersiapkan engine serverless lokal untuk: ${file.name}...`, "SYSTEM");
 
-    // ================================================================
-    // BLOK SIMULASI FRONTEND (GANTIKAN DENGAN FETCH() API PYTHON ANDA NANTI)
-    // ================================================================
-    printLog(`Memulai Koneksi WebSocket / API Cloud Worker...`, "SYSTEM");
-    
-    let progress = 0;
-    let currentRow = 0;
-    const totalSimulatedRows = 550; // Anggaplah ada 550 data di excel
-    
-    const interval = setInterval(() => {
-        // Simulasi penambahan row yang berproses
-        currentRow += Math.floor(Math.random() * 45) + 15; // Proses 15-60 baris tiap tik
-        if(currentRow > totalSimulatedRows) currentRow = totalSimulatedRows;
+    try {
+        // 1. Membaca File via SheetJS di RAM Browser
+        const dataArr = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.SheetNames[0];
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {header: 1});
+                    resolve(json);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        if(dataArr.length <= 1) throw new Error("Data kosong atau hanya berisi header.");
+
+        const totalRows = dataArr.length - 1;
+        printLog(`Ditemukan ${totalRows} baris data. Memulai ekstraksi...`);
+
+        // 2. Persiapan Header Tabel Baru
+        let finalData = [];
+        let headerRow = ["DATA_INPUT_UTAMA"];
+        if(options.name) headerRow.push("NAMA_TEMPAT");
+        if(options.latlong) headerRow.push("LATITUDE_LONGITUDE");
+        if(options.address) headerRow.push("ALAMAT_LENGKAP");
         
-        progress = Math.round((currentRow / totalSimulatedRows) * 100);
+        // Kolom statis (Protected) untuk menjaga format user
+        headerRow.push("RATING", "JUMLAH_ULASAN", "NO_TELEPON"); 
         
-        // Update UI
-        progBar.style.width = progress + '%';
-        document.getElementById('gmaps-percent').innerText = progress + '%';
-        progStatus.innerText = `Menyelam Data Maps (${currentRow}/${totalSimulatedRows})...`;
-        
-        // Memunculkan log virtual yang realistis
-        if(progress < 100) {
-            printLog(`Memproses batch baris ${currentRow} melalui headless browser...`);
+        if(options.url) headerRow.push("URL_MAPS");
+        finalData.push(headerRow);
+
+        let needGeocoding = options.name || options.latlong || options.address;
+
+        if (needGeocoding) {
+             printLog(`Mengaktifkan Public OpenStreetMap Geocoder (Bebas Biaya).`, "SYSTEM");
+             printLog(`Kecepatan dibatasi 1 detik per API untuk menghindari IP Block...`, "WARN");
+        } else {
+             printLog(`Mode URL Only aktif. Pemrosesan berjalan kecepatan Super Cepat!`, "SYSTEM");
         }
 
-        if (progress >= 100) {
-            clearInterval(interval);
-            progStatus.innerText = "Selesai! Menyusun file akhir...";
-            printLog(`Sistem selesai memproses ${totalSimulatedRows} baris.`, "SUCCESS");
-            
-            // Catatan Pengingat Untuk Developer (Anda)
-            printLog(`<br>=====================================<br>`, "WARN");
-            printLog(`CATATAN DEVELOPER UNTUK A OPIK:`, "WARN");
-            printLog(`Bagian interval ini adalah Mockup / Simulasi. Untuk menghubungkan ke Python FastAPI yang asli gunakan syntax:`, "WARN");
-            printLog(`fetch('https://URL_API_PYTHON_ANDA.com/scrape', { method: 'POST', body: formData })`, "WARN");
-            printLog(`Lalu baca stream response-nya untuk mengupdate log ini secara realtime.`, "WARN");
-            printLog(`=====================================<br>`, "WARN");
+        // 3. Looping Proses Data dengan Chunking
+        for(let i = 1; i <= totalRows; i++) {
+            let row = dataArr[i];
+            if(!row || row.length === 0 || !row[0]) continue;
 
-            // Mockup auto-download (Menggunakan data dummy kosong)
-            setTimeout(() => {
-                printLog(`Mengunduh file Excel hasil scraping...`);
-                exportData([["DATA_INPUT_UTAMA", "HASIL_NAMA", "HASIL_LATLONG", "HASIL_ALAMAT"]], 'xlsx', `Nadi_Scraper_Hasil_${new Date().getTime()}`);
+            let inputQuery = String(row[0]).trim();
+            let newRow = [inputQuery];
+
+            let geoData = { name: "Tidak Ditemukan", latlon: "Tidak Ditemukan", address: "Tidak Ditemukan" };
+
+            // Ambil data Lat/Long dan alamat secara real-time via API Publik
+            if (needGeocoding && inputQuery !== "") {
+                try {
+                    let fetchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(inputQuery)}&format=json&limit=1`;
+                    const res = await fetch(fetchUrl);
+                    const geoJson = await res.json();
+
+                    if (geoJson && geoJson.length > 0) {
+                        geoData.address = geoJson[0].display_name;
+                        geoData.latlon = `${geoJson[0].lat}, ${geoJson[0].lon}`;
+                        geoData.name = geoJson[0].display_name.split(',')[0];
+                    }
+                } catch(e) {
+                    geoData.address = "Error fetching data";
+                }
                 
-                // Kembalikan tombol ke semula
-                btn.disabled = false;
-                btn.classList.remove('opacity-50');
-                progStatus.innerText = "Selesai! File berhasil diunduh.";
-            }, 2000);
+                // Wajib Jeda 1 detik agar browser tidak dianggap DDoS oleh API Publik
+                await delay(1100);
+            } else if (!needGeocoding && i % 1000 === 0) {
+                // Jeda mikro setiap 1000 baris agar browser tidak macet jika data jutaan
+                await delay(10); 
+            }
+
+            // Memasukkan hasil tarikan
+            if(options.name) newRow.push(geoData.name);
+            if(options.latlong) newRow.push(geoData.latlon);
+            if(options.address) newRow.push(geoData.address);
+
+            // Pengisian Default N/A untuk yang butuh proxy
+            newRow.push("N/A (CORS Protected)", "N/A (CORS Protected)", "N/A (CORS Protected)");
+
+            // Merakit URL Pintar Google Maps
+            if(options.url) {
+                let mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(inputQuery)}`;
+                newRow.push(mapsUrl);
+            }
+
+            finalData.push(newRow);
+
+            // Kalkulasi dan Animasi Progress
+            let pct = Math.round((i / totalRows) * 100);
+            progBar.style.width = pct + '%';
+            document.getElementById('gmaps-percent').innerText = pct + '%';
+            progStatus.innerText = `Menarik Data (${i}/${totalRows})...`;
+
+            if(needGeocoding || i % 1000 === 0 || i === totalRows) {
+                printLog(`Sukses: ${inputQuery.substring(0, 30)}...`);
+            }
         }
-    }, 800);
-    // ================================================================
+
+        printLog("Menyusun file Excel...", "SYSTEM");
+        
+        // 4. Proses Auto Download
+        exportData(finalData, 'xlsx', `Nadi_Maps_Scraper_${new Date().getTime()}`);
+
+        progStatus.innerText = "Selesai! File berhasil diunduh.";
+        printLog("Proses selesai tanpa bantuan server!", "SUCCESS");
+
+    } catch (error) {
+        console.error(error);
+        printLog(error.message, "ERROR");
+        progStatus.innerText = "Terjadi kesalahan.";
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50');
+    }
 }

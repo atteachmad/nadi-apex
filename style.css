@@ -41,7 +41,6 @@ body { margin: 0; overflow: hidden; background-color: #F0F4F8; font-family: 'Seg
         white-space: nowrap;
         overflow: hidden;
     }
-    /* Hilangkan teks brand dan menu saat mengecil */
     #sidebar.desktop-collapsed .hide-on-collapse {
         opacity: 0;
         width: 0 !important;
@@ -49,7 +48,6 @@ body { margin: 0; overflow: hidden; background-color: #F0F4F8; font-family: 'Seg
         padding: 0 !important;
         pointer-events: none;
     }
-    /* Posisi icon merapat ke tengah saat mengecil */
     #sidebar.desktop-collapsed .header-container {
         justify-content: center;
         padding-left: 1rem;

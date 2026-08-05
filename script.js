@@ -14,6 +14,7 @@ function toggleSidebar() {
     
     if (isMobile) {
         sidebar.classList.toggle('-translate-x-full');
+        
         if (sidebar.classList.contains('-translate-x-full')) {
             overlay.classList.add('opacity-0');
             setTimeout(() => overlay.classList.add('hidden'), 300);
@@ -24,7 +25,11 @@ function toggleSidebar() {
     } else {
         sidebar.classList.toggle('desktop-collapsed');
         if(tooltip) {
-            tooltip.innerText = sidebar.classList.contains('desktop-collapsed') ? "Buka Sidebar" : "Tutup Sidebar";
+            if (sidebar.classList.contains('desktop-collapsed')) {
+                tooltip.innerText = "Buka Sidebar";
+            } else {
+                tooltip.innerText = "Tutup Sidebar";
+            }
         }
     }
 }
@@ -40,7 +45,6 @@ function switchTab(tabId) {
     document.getElementById('btn-' + tabId).classList.add('bg-blue-800', 'text-white');
     
     const titles = {
-        'parquet': 'Parquet Converter & Injector',
         'splitter': 'Data Splitter (Auto Kategorisasi)',
         'rowsplitter': 'Split by Rows (Potong Baris)',
         'merger': 'Data Merger (Penggabung Cepat)',
@@ -53,13 +57,11 @@ function switchTab(tabId) {
 
     if (window.innerWidth < 768) {
         const sidebar = document.getElementById('sidebar');
-        if (!sidebar.classList.contains('-translate-x-full')) toggleSidebar();
+        if (!sidebar.classList.contains('-translate-x-full')) {
+            toggleSidebar();
+        }
     }
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    switchTab('parquet');
-});
 
 // --- 2. LOGIC DRAG & DROP & FILES ---
 function updateFileLabel(inputId, labelId) {
@@ -73,6 +75,7 @@ function updateFileLabel(inputId, labelId) {
 function setupDropzone(zoneId, inputId, labelId) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
+    
     if(!zone || !input) return;
 
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
@@ -86,11 +89,12 @@ function setupDropzone(zoneId, inputId, labelId) {
         }
     });
     zone.addEventListener('click', (e) => {
-        if(e.target !== input && e.target.tagName !== 'LABEL') input.click();
+        if(e.target !== input && e.target.tagName !== 'LABEL') {
+            input.click();
+        }
     });
 }
 
-setupDropzone('dropzone-parquet', 'parquet-input-files', 'parquet-label');
 setupDropzone('dropzone-split', 'split-files', 'split-label');
 setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
@@ -113,147 +117,6 @@ function exportData(dataArr2D, format, filename) {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Data");
         XLSX.writeFile(wb, filename + ".xlsx");
-    }
-}
-
-// --- TRUE PARQUET ENGINE (WASM WASM-DUCKDB) ---
-async function loadDuckDBEngine() {
-    if (window._duckdbInstance) return window._duckdbInstance;
-    
-    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm');
-    const bundles = duckdb.getJsDelivrBundles();
-    const bundle = await duckdb.selectBundle(bundles);
-    
-    const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'text/javascript'}));
-    const worker = new Worker(worker_url);
-    const logger = new duckdb.ConsoleLogger();
-    const db = new duckdb.AsyncDuckDB(logger, worker);
-    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-    URL.revokeObjectURL(worker_url);
-    
-    window._duckdbInstance = db;
-    window._duckdbLib = duckdb;
-    return db;
-}
-
-function toggleParquetMode() {
-    const isInject = document.querySelector('input[name="parquet-mode"]:checked').value === 'inject';
-    const masterSection = document.getElementById('parquet-master-section');
-    if (isInject) masterSection.classList.remove('hidden');
-    else masterSection.classList.add('hidden');
-}
-
-async function startParquetProcess() {
-    const mode = document.querySelector('input[name="parquet-mode"]:checked').value;
-    const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
-    const customColsRaw = document.getElementById('parquet-custom-columns').value;
-    
-    const customCols = customColsRaw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
-    const inputFiles = document.getElementById('parquet-input-files').files;
-    const masterFile = document.getElementById('parquet-master-file').files[0];
-
-    if (inputFiles.length === 0) return alert("Silakan unggah File Transaksi (Baru) terlebih dahulu!");
-    if (mode === 'inject' && !masterFile) return alert("Mode Suntik aktif: Silakan unggah File Master .parquet lama Anda!");
-
-    const btn = document.getElementById('btn-run-parquet');
-    const progCont = document.getElementById('parquet-progress-container');
-    const progBar = document.getElementById('parquet-progress-bar');
-    const progStatus = document.getElementById('parquet-status');
-
-    btn.disabled = true; btn.classList.add('opacity-50');
-    progCont.classList.remove('hidden');
-    progBar.style.width = '10%';
-
-    try {
-        progStatus.innerText = "Menghidupkan Parquet Engine di Browser...";
-        const db = await loadDuckDBEngine();
-        const conn = await db.connect();
-        const duckdbLib = window._duckdbLib;
-
-        progBar.style.width = '30%';
-
-        // TAHAP 1: Load File Master Lama (Mode Inject/Append)
-        if (mode === 'inject') {
-            progStatus.innerText = "Memuat File Master Parquet...";
-            await db.registerFileHandle('master.parquet', masterFile, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
-            await conn.query(`CREATE TABLE master_table AS SELECT * FROM 'master.parquet'`);
-        }
-
-        // TAHAP 2: Proses File Input Baru
-        for (let i = 0; i < inputFiles.length; i++) {
-            const file = inputFiles[i];
-            let fileName = `input_${i}.csv`;
-            progStatus.innerText = `Memproses File: ${file.name} ...`;
-
-            if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                const csvStr = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
-                        resolve(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
-                    };
-                    reader.readAsArrayBuffer(file);
-                });
-                await db.registerFileText(fileName, csvStr);
-            } else {
-                await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
-            }
-
-            // VALIDASI HEADER KOLOM AGAR TIDAK KOSONG
-            const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
-            const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
-
-            let selectQuery = "*";
-            if (customCols.length > 0) {
-                let validCols = [];
-                if (colMode === 'keep') {
-                    validCols = customCols.filter(c => actualCols.includes(c));
-                    if(validCols.length === 0) {
-                        throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\nKolom asli yang tersedia: ${actualCols.join(', ')}`);
-                    }
-                } else if (colMode === 'drop') {
-                    validCols = actualCols.filter(c => !customCols.includes(c));
-                }
-                selectQuery = validCols.map(c => `"${c}"`).join(", ");
-            }
-
-            // QUERY EKSEKUSI SQL NATIVE
-            if (mode === 'create' && i === 0) {
-                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM '${fileName}'`);
-            } else {
-                await conn.query(`INSERT INTO master_table SELECT ${selectQuery} FROM '${fileName}'`);
-            }
-        }
-
-        // TAHAP 3: Generate File Format .parquet Asli
-        progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
-        progBar.style.width = '80%';
-        
-        await conn.query(`COPY master_table TO 'output.parquet' (FORMAT PARQUET)`);
-        const buffer = await db.copyFileToBuffer('output.parquet');
-        
-        const blob = new Blob([buffer], { type: 'application/octet-stream' });
-        const outName = mode === 'create' ? "Nadi_Master_Data.parquet" : "Nadi_Master_Updated.parquet";
-
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = outName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        await conn.query(`DROP TABLE master_table`);
-        await conn.close();
-
-        progBar.style.width = '100%';
-        progStatus.innerText = "Selesai! File Parquet siap ditarik ke Power BI.";
-        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil diunduh.\nSekarang Anda bisa melakukan Get Data -> Parquet di Power BI secara instan tanpa lag!`), 300);
-
-    } catch (e) {
-        alert("TERJADI KESALAHAN SISTEM:\n\n" + e.message);
-        progStatus.innerText = "Proses Dibatalkan.";
-    } finally {
-        btn.disabled = false; btn.classList.remove('opacity-50');
     }
 }
 
@@ -595,7 +458,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onresult = (event) => {
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript + ' ';
+            }
         }
         if (finalTranscript && sttTextarea) {
             sttTextarea.value += finalTranscript;
@@ -604,8 +469,21 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         }
     };
 
-    recognition.onerror = (event) => { if(event.error === 'not-allowed') stopRecordingUI(); };
-    recognition.onend = () => { if (isRecording) { try { recognition.start(); } catch(e) {} } else { stopRecordingUI(); } };
+    recognition.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+        if(event.error === 'not-allowed') {
+            alert('Izin penggunaan mikrofon ditolak oleh browser.');
+            stopRecordingUI();
+        }
+    };
+
+    recognition.onend = () => {
+        if (isRecording) {
+            try { recognition.start(); } catch(e) {}
+        } else {
+            stopRecordingUI();
+        }
+    };
 } else {
     if(sttBtnToggle) {
         sttBtnToggle.disabled = true;
@@ -623,9 +501,15 @@ function stopRecordingUI() {
 
 if(sttBtnToggle) {
     sttBtnToggle.addEventListener('click', () => {
-        if(!recognition) return alert('Fitur ini tidak didukung di browser Anda.');
-        if(isRecording) { isRecording = false; recognition.stop(); stopRecordingUI(); } 
-        else { try { recognition.start(); } catch(e) {} }
+        if(!recognition) return alert('Fitur ini tidak didukung di browser Anda. Gunakan Google Chrome versi terbaru.');
+        
+        if(isRecording) {
+            isRecording = false;
+            recognition.stop();
+            stopRecordingUI();
+        } else {
+            try { recognition.start(); } catch(e) { console.log(e); }
+        }
     });
 }
 
@@ -647,10 +531,12 @@ function saveAudioText(type) {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = filename;
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
-// Text to Audio
+// 6C. Text to Audio (Speech Synthesis)
 const ttsInput = document.getElementById('tts-input');
 const btnTtsPlay = document.getElementById('btn-tts-play');
 const btnTtsStop = document.getElementById('btn-tts-stop');
@@ -660,10 +546,15 @@ if(btnTtsPlay) {
     btnTtsPlay.addEventListener('click', () => {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
+            
             const text = ttsInput.value.trim();
             if(!text) return alert('Ketikkan teks terlebih dahulu!');
+
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = ttsLang.value;
+            utterance.rate = 0.95; 
+            utterance.pitch = 1;
+
             window.speechSynthesis.speak(utterance);
         } else {
             alert("Browser Anda tidak mendukung fitur Text to Audio.");
@@ -672,34 +563,54 @@ if(btnTtsPlay) {
 }
 
 if(btnTtsStop) {
-    btnTtsStop.addEventListener('click', () => { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); });
+    btnTtsStop.addEventListener('click', () => {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+        }
+    });
 }
 
-// --- 7. GOOGLE MAPS SCRAPER LOGIC ---
+// --- 7. GOOGLE MAPS SCRAPER LOGIC (CLIENT-SIDE SERVERLESS) ---
+
+// Fungsi Download Template Kustom yang Aman
 function downloadCustomGmapsTemplate() {
     try {
-        const templateData = [ ["DATA_INPUT_UTAMA"], ["JNE Express Tomang Raya Jakarta"] ];
+        const templateData = [
+            ["DATA_INPUT_UTAMA"],
+            ["JNE Express Tomang Raya Jakarta"],
+            ["-6.175392, 106.827153"],
+            ["Jl. Soekarno-Hatta No.829 Mekar Mulya Bandung"]
+        ];
+        
         const ws = XLSX.utils.aoa_to_sheet(templateData);
         ws['!cols'] = [{ wch: 45 }]; 
+        
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Input_Data");
         XLSX.writeFile(wb, "Nadi_Template_Maps_Scraper.xlsx");
-    } catch (err) {}
+    } catch (err) {
+        alert("Terjadi kesalahan sistem saat membuat template. Pastikan memori browser Anda tidak penuh.");
+        console.error(err);
+    }
 }
 
+// Helper Jeda Asinkronus agar browser tidak crash dan tidak diblokir API
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
+// Fungsi Utama Proses (Dilengkapi dengan Double-Engine API Fallback)
 async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');
-    if (!fileInput || fileInput.files.length === 0) return alert('Unggah file terlebih dahulu!');
-    
+    if (!fileInput || fileInput.files.length === 0) {
+        return alert('Silakan unggah file Excel/CSV terlebih dahulu!');
+    }
+
     const options = {
         name: document.getElementById('opt-name').checked,
         latlong: document.getElementById('opt-latlong').checked,
         address: document.getElementById('opt-address').checked,
         url: document.getElementById('opt-url').checked,
     };
-    
+
     const file = fileInput.files[0];
     const btn = document.getElementById('btn-run-custom-gmaps');
     const progCont = document.getElementById('gmaps-progress-container');
@@ -707,55 +618,100 @@ async function startCustomMapsScraper() {
     const progStatus = document.getElementById('gmaps-status');
     const logBox = document.getElementById('gmaps-log');
 
-    btn.disabled = true; btn.classList.add('opacity-50');
-    progCont.classList.remove('hidden'); progBar.style.width = '0%';
+    btn.disabled = true;
+    btn.classList.add('opacity-50');
+    progCont.classList.remove('hidden');
+    progBar.style.width = '0%';
     
     const printLog = (text, type = "INFO") => {
-        let color = type === "ERROR" ? "text-red-400" : (type === "SYSTEM" ? "text-blue-400" : "text-green-400");
+        let color = type === "ERROR" ? "text-red-400" : (type === "WARN" ? "text-yellow-400" : (type === "SYSTEM" ? "text-blue-400" : "text-green-400"));
         logBox.innerHTML += `<span class="${color}">[${type}] ${text}</span><br>`;
         logBox.scrollTop = logBox.scrollHeight;
     };
+
+    logBox.innerHTML = '';
+    printLog(`Mempersiapkan engine serverless lokal untuk: ${file.name}...`, "SYSTEM");
 
     try {
         const dataArr = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
-                resolve(XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1}));
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.SheetNames[0];
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {header: 1});
+                    resolve(json);
+                } catch (err) {
+                    reject(err);
+                }
             };
             reader.readAsArrayBuffer(file);
         });
 
-        if(dataArr.length <= 1) throw new Error("Data kosong.");
+        if(dataArr.length <= 1) throw new Error("Data kosong atau hanya berisi header.");
+
         const totalRows = dataArr.length - 1;
+        printLog(`Ditemukan ${totalRows} baris data. Memulai ekstraksi...`);
+
         let finalData = [];
         let headerRow = ["DATA_INPUT_UTAMA"];
-        
         if(options.name) headerRow.push("NAMA_TEMPAT");
         if(options.latlong) headerRow.push("LATITUDE_LONGITUDE");
         if(options.address) headerRow.push("ALAMAT_LENGKAP");
+        
         headerRow.push("RATING", "JUMLAH_ULASAN", "NO_TELEPON"); 
+        
         if(options.url) headerRow.push("URL_MAPS");
         finalData.push(headerRow);
 
         let needGeocoding = options.name || options.latlong || options.address;
 
+        if (needGeocoding) {
+             printLog(`Mengaktifkan sistem pencarian cerdas ganda (OSM & ArcGIS)...`, "SYSTEM");
+        } else {
+             printLog(`Mode URL Only aktif. Pemrosesan berjalan kecepatan Super Cepat!`, "SYSTEM");
+        }
+
         for(let i = 1; i <= totalRows; i++) {
-            let inputQuery = String(dataArr[i][0]).trim();
-            if(!inputQuery) continue;
+            let row = dataArr[i];
+            if(!row || row.length === 0 || !row[0]) continue;
+
+            let inputQuery = String(row[0]).trim();
             let newRow = [inputQuery];
+
             let geoData = { name: "Tidak Ditemukan", latlon: "Tidak Ditemukan", address: "Tidak Ditemukan" };
 
-            if (needGeocoding) {
+            // LOGIKA DOUBLE-ENGINE: Mencari koordinat alamat rumit secara akurat
+            if (needGeocoding && inputQuery !== "") {
                 try {
-                    let res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(inputQuery)}&format=json&limit=1`);
-                    let geoJson = await res.json();
+                    // MESIN 1: OpenStreetMap (Cocok untuk alamat pendek/kota)
+                    let fetchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(inputQuery)}&format=json&limit=1`;
+                    const res = await fetch(fetchUrl);
+                    const geoJson = await res.json();
+
                     if (geoJson && geoJson.length > 0) {
                         geoData.address = geoJson[0].display_name;
                         geoData.latlon = `${geoJson[0].lat}, ${geoJson[0].lon}`;
                         geoData.name = geoJson[0].display_name.split(',')[0];
+                    } else {
+                        // MESIN 2 (FALLBACK): ArcGIS (Sangat pintar membaca format alamat panjang / rumit ala Google Maps)
+                        let arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(inputQuery)}&maxLocations=1`;
+                        const resArc = await fetch(arcgisUrl);
+                        const arcJson = await resArc.json();
+
+                        if (arcJson && arcJson.candidates && arcJson.candidates.length > 0) {
+                            let candidate = arcJson.candidates[0];
+                            geoData.address = candidate.address;
+                            geoData.latlon = `${candidate.location.y}, ${candidate.location.x}`;
+                            geoData.name = candidate.address.split(',')[0];
+                        }
                     }
-                } catch(e) {}
+                } catch(e) {
+                    console.warn(`Gagal mencari koordinat untuk: ${inputQuery}`);
+                }
+                
+                // Jeda aman untuk menghindari pemblokiran IP
                 await delay(1200);
             } else if (!needGeocoding && i % 1000 === 0) {
                 await delay(10); 
@@ -764,21 +720,39 @@ async function startCustomMapsScraper() {
             if(options.name) newRow.push(geoData.name);
             if(options.latlong) newRow.push(geoData.latlon);
             if(options.address) newRow.push(geoData.address);
-            newRow.push("N/A", "N/A", "N/A");
-            if(options.url) newRow.push(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(inputQuery)}`);
+
+            newRow.push("N/A (CORS Protected)", "N/A (CORS Protected)", "N/A (CORS Protected)");
+
+            if(options.url) {
+                let mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(inputQuery)}`;
+                newRow.push(mapsUrl);
+            }
+
             finalData.push(newRow);
 
             let pct = Math.round((i / totalRows) * 100);
-            progBar.style.width = pct + '%'; document.getElementById('gmaps-percent').innerText = pct + '%';
+            progBar.style.width = pct + '%';
+            document.getElementById('gmaps-percent').innerText = pct + '%';
             progStatus.innerText = `Menarik Data (${i}/${totalRows})...`;
+
+            if(needGeocoding || i % 1000 === 0 || i === totalRows) {
+                printLog(`Selesai: ${inputQuery.substring(0, 30)}...`);
+            }
         }
 
+        printLog("Menyusun file Excel akhir...", "SYSTEM");
+        
         exportData(finalData, 'xlsx', `Nadi_Maps_Scraper_${new Date().getTime()}`);
+
         progStatus.innerText = "Selesai! File berhasil diunduh.";
+        printLog("Proses selesai tanpa bantuan server!", "SUCCESS");
 
     } catch (error) {
+        console.error(error);
         printLog(error.message, "ERROR");
+        progStatus.innerText = "Terjadi kesalahan.";
     } finally {
-        btn.disabled = false; btn.classList.remove('opacity-50');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50');
     }
 }

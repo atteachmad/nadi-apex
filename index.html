@@ -41,10 +41,10 @@
         </div>
 
         <nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
-            <!-- NEW MENU: DuckDB Converter -->
-            <button onclick="switchTab('duckdb')" id="btn-duckdb" class="menu-btn w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
+            <!-- PARQUET INJECTOR MENU -->
+            <button onclick="switchTab('parquet')" id="btn-parquet" class="menu-btn w-full flex items-center p-3 rounded-lg bg-blue-800 text-white transition hover:bg-blue-700">
                 <i class="fas fa-database w-6 text-center text-lg flex-shrink-0 text-yellow-400"></i>
-                <span class="hide-on-collapse ml-3">DuckDB Injector</span>
+                <span class="hide-on-collapse ml-3">Parquet Injector</span>
             </button>
             <button onclick="switchTab('splitter')" id="btn-splitter" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
                 <i class="fas fa-cut w-6 text-center text-lg flex-shrink-0"></i>
@@ -87,7 +87,7 @@
                 <button onclick="toggleSidebar()" class="md:hidden text-nadi-blue focus:outline-none mr-3 px-3 py-2 rounded-lg hover:bg-gray-100 transition flex items-center bg-gray-50 border border-gray-200 shadow-sm">
                     <i class="fas fa-bars text-lg"></i>
                 </button>
-                <h2 class="text-base md:text-xl font-semibold text-gray-700 truncate" id="header-title">DuckDB Converter & Injector</h2>
+                <h2 class="text-base md:text-xl font-semibold text-gray-700 truncate" id="header-title">Parquet Converter & Injector</h2>
             </div>
             <div class="flex items-center space-x-2 md:space-x-4">
                 <span class="bg-green-100 text-green-700 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold border border-green-200 shadow-sm whitespace-nowrap">
@@ -98,12 +98,12 @@
 
         <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
 
-            <!-- TAB: DUCKDB CONVERTER (NEW) -->
-            <div id="tab-duckdb" class="tab-content active max-w-5xl mx-auto">
+            <!-- TAB: PARQUET CONVERTER -->
+            <div id="tab-parquet" class="tab-content active max-w-5xl mx-auto">
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6 border-b pb-4">
-                        <h3 class="text-xl font-bold text-nadi-blue"><i class="fas fa-database text-yellow-500 mr-2"></i> DuckDB Engine Processor</h3>
-                        <p class="text-sm text-gray-500 mt-2">Buat file database ultra-cepat (.duckdb) baru, atau suntikkan data baru ke file master yang sudah ada.</p>
+                        <h3 class="text-xl font-bold text-nadi-blue"><i class="fas fa-database text-yellow-500 mr-2"></i> Parquet Engine Processor</h3>
+                        <p class="text-sm text-gray-500 mt-2">Buat file database ultra-cepat (.parquet) baru, atau suntikkan data baru ke file master yang sudah ada.</p>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -112,26 +112,26 @@
                             <label class="block text-sm font-bold text-gray-800"><i class="fas fa-cog text-gray-500 mr-1"></i> 1. Pilih Mode Pemrosesan:</label>
                             <div class="flex space-x-4 mb-4">
                                 <label class="flex-1 flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition shadow-sm bg-white">
-                                    <input type="radio" name="duckdb-mode" value="create" checked class="text-nadi-blue focus:ring-nadi-blue mr-3" onchange="toggleDuckDbMode()">
-                                    <span class="text-sm font-bold text-gray-700">Buat File DuckDB Baru</span>
+                                    <input type="radio" name="parquet-mode" value="create" checked class="text-nadi-blue focus:ring-nadi-blue mr-3" onchange="toggleParquetMode()">
+                                    <span class="text-sm font-bold text-gray-700">Buat File Parquet Baru</span>
                                 </label>
                                 <label class="flex-1 flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition shadow-sm bg-white">
-                                    <input type="radio" name="duckdb-mode" value="inject" class="text-nadi-blue focus:ring-nadi-blue mr-3" onchange="toggleDuckDbMode()">
+                                    <input type="radio" name="parquet-mode" value="inject" class="text-nadi-blue focus:ring-nadi-blue mr-3" onchange="toggleParquetMode()">
                                     <span class="text-sm font-bold text-gray-700">Suntik ke Master (Append)</span>
                                 </label>
                             </div>
 
-                            <div id="duckdb-master-section" class="hidden">
-                                <label class="block text-sm font-bold text-gray-700 mb-1">File Master (.duckdb / .csv lama):</label>
-                                <input type="file" id="duckdb-master-file" accept=".csv,.duckdb" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-nadi-blue hover:file:bg-blue-100 border border-gray-200 rounded-lg p-1">
+                            <div id="parquet-master-section" class="hidden">
+                                <label class="block text-sm font-bold text-gray-700 mb-1">File Master (.parquet lama):</label>
+                                <input type="file" id="parquet-master-file" accept=".parquet" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-nadi-blue hover:file:bg-blue-100 border border-gray-200 rounded-lg p-1">
                             </div>
 
                             <div>
                                 <label class="block text-sm font-bold text-gray-700 mb-1">File Data Transaksi (CSV/XLSX):</label>
-                                <div id="dropzone-duckdb" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center h-32">
-                                    <input type="file" id="duckdb-input-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('duckdb-input-files', 'duckdb-label')">
-                                    <label for="duckdb-input-files" class="bg-nadi-blue text-white px-4 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm font-bold">Pilih File Baru</label>
-                                    <p id="duckdb-label" class="mt-2 text-xs font-bold text-gray-500 truncate w-full">Belum ada file terpilih</p>
+                                <div id="dropzone-parquet" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center h-32">
+                                    <input type="file" id="parquet-input-files" multiple accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('parquet-input-files', 'parquet-label')">
+                                    <label for="parquet-input-files" class="bg-nadi-blue text-white px-4 py-2 rounded shadow cursor-pointer hover:bg-blue-800 transition text-sm font-bold">Pilih File Baru</label>
+                                    <p id="parquet-label" class="mt-2 text-xs font-bold text-gray-500 truncate w-full">Belum ada file terpilih</p>
                                 </div>
                             </div>
                         </div>
@@ -139,35 +139,35 @@
                         <!-- Right Column: Custom Columns -->
                         <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 shadow-inner">
                             <label class="block text-sm font-bold text-gray-800 mb-2"><i class="fas fa-filter text-nadi-red mr-1"></i> 2. Instruksi Kolom Kustom:</label>
-                            <p class="text-xs text-gray-500 mb-4">Atur kolom apa saja yang ingin dimasukkan ke database agar pemrosesan berjalan secepat kilat.</p>
+                            <p class="text-xs text-gray-500 mb-4">Atur kolom apa saja yang ingin dimasukkan agar pemrosesan berjalan secepat kilat (misal: LATEST_SM_NO, ID_ACCOUNT, WEIGHT).</p>
                             
                             <div class="flex space-x-4 mb-3">
                                 <label class="flex items-center text-sm font-semibold text-gray-700 cursor-pointer">
-                                    <input type="radio" name="duckdb-col-mode" value="keep" checked class="mr-2 text-nadi-blue focus:ring-nadi-blue">
+                                    <input type="radio" name="parquet-col-mode" value="keep" checked class="mr-2 text-nadi-blue focus:ring-nadi-blue">
                                     Hanya Ambil Kolom
                                 </label>
                                 <label class="flex items-center text-sm font-semibold text-gray-700 cursor-pointer">
-                                    <input type="radio" name="duckdb-col-mode" value="drop" class="mr-2 text-nadi-red focus:ring-nadi-red">
+                                    <input type="radio" name="parquet-col-mode" value="drop" class="mr-2 text-nadi-red focus:ring-nadi-red">
                                     Buang / Hapus Kolom
                                 </label>
                             </div>
 
-                            <textarea id="duckdb-custom-columns" class="w-full p-3 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue text-sm text-gray-700 resize-none h-28 custom-scrollbar uppercase" placeholder="Ketik nama header kolom, pisahkan dengan koma.&#10;Contoh: ORIGIN, DEST, WEIGHT, LATEST_SM_NO"></textarea>
-                            <p class="text-[10px] text-gray-400 mt-1">*Penulisan bebas (Huruf besar/kecil tidak masalah, sistem otomatis menyesuaikan).</p>
+                            <textarea id="parquet-custom-columns" class="w-full p-3 border border-gray-300 rounded focus:ring-nadi-blue focus:border-nadi-blue text-sm text-gray-700 resize-none h-28 custom-scrollbar uppercase" placeholder="Ketik nama header kolom, pisahkan dengan koma.&#10;Contoh: LATEST_SM_NO, ID_ACCOUNT, WEIGHT"></textarea>
+                            <p class="text-[10px] text-gray-400 mt-1">*Sistem otomatis melakukan validasi kolom agar terhindar dari hasil kosong.</p>
                         </div>
                     </div>
 
-                    <button onclick="startDuckDBProcess()" id="btn-run-duckdb" class="mt-8 w-full bg-nadi-blue text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-800 transition flex items-center justify-center text-lg">
-                        <i class="fas fa-bolt mr-2 text-yellow-400"></i> Eksekusi Pemrosesan Kilat
+                    <button onclick="startParquetProcess()" id="btn-run-parquet" class="mt-8 w-full bg-nadi-blue text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-800 transition flex items-center justify-center text-lg">
+                        <i class="fas fa-bolt mr-2 text-yellow-400"></i> Eksekusi Parquet Engine
                     </button>
                     
-                    <div id="duckdb-progress-container" class="mt-6 hidden">
+                    <div id="parquet-progress-container" class="mt-6 hidden">
                         <div class="flex justify-between text-sm font-bold text-gray-700 mb-1">
-                            <span id="duckdb-status">Menyiapkan Engine Data...</span>
-                            <span id="duckdb-percent">0%</span>
+                            <span id="parquet-status">Menyiapkan Engine Data...</span>
+                            <span id="parquet-percent">0%</span>
                         </div>
                         <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner">
-                            <div id="duckdb-progress-bar" class="bg-gradient-to-r from-blue-500 to-nadi-blue h-4 rounded-full transition-all duration-300 relative overflow-hidden" style="width: 0%">
+                            <div id="parquet-progress-bar" class="bg-gradient-to-r from-blue-500 to-nadi-blue h-4 rounded-full transition-all duration-300 relative overflow-hidden" style="width: 0%">
                                 <div class="absolute inset-0 bg-white opacity-20" style="animation: progress-shimmer 2s infinite linear;"></div>
                             </div>
                         </div>
@@ -175,7 +175,7 @@
                 </div>
             </div>
 
-            <!-- TAB: SPLITTER (SAMA SEPERTI SEBELUMNYA) -->
+            <!-- TAB: SPLITTER -->
             <div id="tab-splitter" class="tab-content max-w-4xl mx-auto">
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6">
@@ -356,7 +356,6 @@
 
             <!-- TAB: MAPS SCRAPER KUSTOM -->
             <div id="tab-gmaps" class="tab-content max-w-4xl mx-auto">
-                <!-- (Kode gmaps tidak diubah, tetap seperti aslinya) -->
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100">
                     <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center border-b pb-3 gap-4">
                         <div>
@@ -375,11 +374,10 @@
                         <p id="gmaps-label" class="mt-2 text-xs font-bold text-gray-600">Belum ada file yang dipilih</p>
                     </div>
                     
-                    <!-- Form gmaps options ... -->
                     <button onclick="startCustomMapsScraper()" id="btn-run-custom-gmaps" class="mt-6 w-full bg-green-600 text-white font-bold py-3 rounded-lg shadow-md hover:bg-green-700 transition flex items-center justify-center">
                         <i class="fas fa-play mr-2"></i> Eksekusi Pemetaan Data
                     </button>
-                    <!-- Progress & Log container -->
+                    
                     <div id="gmaps-progress-container" class="mt-6 hidden">
                         <div class="flex justify-between text-xs font-bold text-gray-600 mb-1">
                             <span id="gmaps-status">Mempersiapkan sistem pembaca data...</span>
@@ -400,10 +398,10 @@
                 <div class="bg-white p-5 md:p-8 rounded-xl shadow-lg border border-gray-100 space-y-6">
                     <h3 class="text-xl md:text-2xl font-bold text-nadi-blue border-b pb-2">Panduan Penggunaan</h3>
                     <div>
-                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-database text-yellow-500 mr-2"></i> 1. DuckDB Injector (Baru)</h4>
+                        <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-database text-yellow-500 mr-2"></i> 1. Parquet Injector (Baru)</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
-                            <li>Pemrosesan kilat untuk mengubah file CSV/XLSX berukuran raksasa menjadi database yang dioptimalkan untuk Power BI.</li>
-                            <li>Dilengkapi instruksi kolom kustom untuk membuang/mengambil header spesifik secara fleksibel.</li>
+                            <li>Pemrosesan kilat untuk mengubah file CSV/XLSX berukuran raksasa langsung menjadi file database terkompresi asli berformat <b>.parquet</b>.</li>
+                            <li>Dilengkapi instruksi kolom kustom (misal: LATEST_SM_NO, ID_ACCOUNT) dan sistem validasi anti-kosong.</li>
                         </ul>
                     </div>
                     <div>
@@ -452,7 +450,6 @@
                         <p class="text-blue-600 font-semibold tracking-wide text-sm md:text-base text-center">Data Engineer & System Analyst</p>
                         
                         <div class="w-full mt-6 md:mt-8 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            <!-- Link Media Sosial Tetap -->
                             <a href="mailto:atte.achmad@gmail.com" class="flex md:flex-col items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 hover:shadow-md transition">
                                 <i class="fas fa-envelope text-2xl text-blue-600 md:mb-2 mr-4 md:mr-0"></i>
                                 <div class="flex flex-col md:items-center w-full min-w-0">
@@ -475,7 +472,6 @@
         </div>
     </main>
 
-    <!-- Style Inline untuk Animasi Progress Bar -->
     <style>
         @keyframes progress-shimmer {
             0% { transform: translateX(-100%); }

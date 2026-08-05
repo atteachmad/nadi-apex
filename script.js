@@ -14,7 +14,6 @@ function toggleSidebar() {
     
     if (isMobile) {
         sidebar.classList.toggle('-translate-x-full');
-        
         if (sidebar.classList.contains('-translate-x-full')) {
             overlay.classList.add('opacity-0');
             setTimeout(() => overlay.classList.add('hidden'), 300);
@@ -25,11 +24,7 @@ function toggleSidebar() {
     } else {
         sidebar.classList.toggle('desktop-collapsed');
         if(tooltip) {
-            if (sidebar.classList.contains('desktop-collapsed')) {
-                tooltip.innerText = "Buka Sidebar";
-            } else {
-                tooltip.innerText = "Tutup Sidebar";
-            }
+            tooltip.innerText = sidebar.classList.contains('desktop-collapsed') ? "Buka Sidebar" : "Tutup Sidebar";
         }
     }
 }
@@ -45,7 +40,7 @@ function switchTab(tabId) {
     document.getElementById('btn-' + tabId).classList.add('bg-blue-800', 'text-white');
     
     const titles = {
-        'duckdb': 'DuckDB Converter & Injector',
+        'parquet': 'Parquet Converter & Injector',
         'splitter': 'Data Splitter (Auto Kategorisasi)',
         'rowsplitter': 'Split by Rows (Potong Baris)',
         'merger': 'Data Merger (Penggabung Cepat)',
@@ -58,15 +53,12 @@ function switchTab(tabId) {
 
     if (window.innerWidth < 768) {
         const sidebar = document.getElementById('sidebar');
-        if (!sidebar.classList.contains('-translate-x-full')) {
-            toggleSidebar();
-        }
+        if (!sidebar.classList.contains('-translate-x-full')) toggleSidebar();
     }
 }
 
-// Set Tab Default saat Halaman Dimuat
 document.addEventListener("DOMContentLoaded", () => {
-    switchTab('duckdb');
+    switchTab('parquet');
 });
 
 // --- 2. LOGIC DRAG & DROP & FILES ---
@@ -81,7 +73,6 @@ function updateFileLabel(inputId, labelId) {
 function setupDropzone(zoneId, inputId, labelId) {
     const zone = document.getElementById(zoneId);
     const input = document.getElementById(inputId);
-    
     if(!zone || !input) return;
 
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
@@ -95,14 +86,11 @@ function setupDropzone(zoneId, inputId, labelId) {
         }
     });
     zone.addEventListener('click', (e) => {
-        if(e.target !== input && e.target.tagName !== 'LABEL') {
-            input.click();
-        }
+        if(e.target !== input && e.target.tagName !== 'LABEL') input.click();
     });
 }
 
-// Setup Dropzones
-setupDropzone('dropzone-duckdb', 'duckdb-input-files', 'duckdb-label');
+setupDropzone('dropzone-parquet', 'parquet-input-files', 'parquet-label');
 setupDropzone('dropzone-split', 'split-files', 'split-label');
 setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
@@ -120,14 +108,6 @@ function exportData(dataArr2D, format, filename) {
         link.href = URL.createObjectURL(blob);
         link.download = filename + ".csv";
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    } else if (format === 'duckdb_sim') {
-        // Output flat file sangat efisien yang disimulasikan sebagai ekstensi .csv / .duckdb_ready untuk Power BI
-        const csv = Papa.unparse(dataArr2D);
-        const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = filename + ".csv"; // Ekstensi standar agar aman dibuka BI
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } else {
         const ws = XLSX.utils.aoa_to_sheet(dataArr2D);
         const wb = XLSX.utils.book_new();
@@ -136,148 +116,146 @@ function exportData(dataArr2D, format, filename) {
     }
 }
 
-// --- FITUR BARU: DUCKDB CONVERTER LOGIC ---
-function toggleDuckDbMode() {
-    const isInject = document.querySelector('input[name="duckdb-mode"]:checked').value === 'inject';
-    const masterSection = document.getElementById('duckdb-master-section');
-    if (isInject) {
-        masterSection.classList.remove('hidden');
-    } else {
-        masterSection.classList.add('hidden');
-    }
+// --- TRUE PARQUET ENGINE (WASM WASM-DUCKDB) ---
+async function loadDuckDBEngine() {
+    if (window._duckdbInstance) return window._duckdbInstance;
+    
+    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm');
+    const bundles = duckdb.getJsDelivrBundles();
+    const bundle = await duckdb.selectBundle(bundles);
+    
+    const worker_url = URL.createObjectURL(new Blob([`importScripts("${bundle.mainWorker}");`], {type: 'text/javascript'}));
+    const worker = new Worker(worker_url);
+    const logger = new duckdb.ConsoleLogger();
+    const db = new duckdb.AsyncDuckDB(logger, worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(worker_url);
+    
+    window._duckdbInstance = db;
+    window._duckdbLib = duckdb;
+    return db;
 }
 
-async function startDuckDBProcess() {
-    const mode = document.querySelector('input[name="duckdb-mode"]:checked').value;
-    const colMode = document.querySelector('input[name="duckdb-col-mode"]:checked').value;
-    const customColsRaw = document.getElementById('duckdb-custom-columns').value;
+function toggleParquetMode() {
+    const isInject = document.querySelector('input[name="parquet-mode"]:checked').value === 'inject';
+    const masterSection = document.getElementById('parquet-master-section');
+    if (isInject) masterSection.classList.remove('hidden');
+    else masterSection.classList.add('hidden');
+}
+
+async function startParquetProcess() {
+    const mode = document.querySelector('input[name="parquet-mode"]:checked').value;
+    const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
+    const customColsRaw = document.getElementById('parquet-custom-columns').value;
     
-    // Parse Input User ke Array (Upper case, hapus spasi berlebih)
     const customCols = customColsRaw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
-    
-    const inputFiles = document.getElementById('duckdb-input-files').files;
-    const masterFile = document.getElementById('duckdb-master-file').files[0];
+    const inputFiles = document.getElementById('parquet-input-files').files;
+    const masterFile = document.getElementById('parquet-master-file').files[0];
 
-    if (inputFiles.length === 0) return alert("Silakan unggah file Transaksi (File Baru) terlebih dahulu!");
-    if (mode === 'inject' && !masterFile) return alert("Silakan unggah File Master lama untuk dilakukan injeksi/append.");
+    if (inputFiles.length === 0) return alert("Silakan unggah File Transaksi (Baru) terlebih dahulu!");
+    if (mode === 'inject' && !masterFile) return alert("Mode Suntik aktif: Silakan unggah File Master .parquet lama Anda!");
 
-    const btn = document.getElementById('btn-run-duckdb');
-    const progCont = document.getElementById('duckdb-progress-container');
-    const progBar = document.getElementById('duckdb-progress-bar');
-    const progStatus = document.getElementById('duckdb-status');
+    const btn = document.getElementById('btn-run-parquet');
+    const progCont = document.getElementById('parquet-progress-container');
+    const progBar = document.getElementById('parquet-progress-bar');
+    const progStatus = document.getElementById('parquet-status');
 
     btn.disabled = true; btn.classList.add('opacity-50');
     progCont.classList.remove('hidden');
-
-    let allData = [];
-    let finalHeaders = [];
-    let isGlobalHeaderSet = false;
-
-    // Fungsi Internal untuk memfilter indeks kolom
-    function getSelectedIndices(originalHeaders) {
-        let indices = [];
-        let cleanHeaders = originalHeaders.map(h => String(h).trim().toUpperCase());
-        
-        if (customCols.length === 0) {
-            // Jika user tidak ketik apa-apa, ambil semua
-            return cleanHeaders.map((_, i) => i);
-        }
-
-        if (colMode === 'keep') {
-            cleanHeaders.forEach((h, i) => {
-                if (customCols.includes(h)) indices.push(i);
-            });
-        } else if (colMode === 'drop') {
-            cleanHeaders.forEach((h, i) => {
-                if (!customCols.includes(h)) indices.push(i);
-            });
-        }
-        return indices;
-    }
+    progBar.style.width = '10%';
 
     try {
-        // Step 1: Jika mode Inject, baca file Master lama terlebih dahulu
+        progStatus.innerText = "Menghidupkan Parquet Engine di Browser...";
+        const db = await loadDuckDBEngine();
+        const conn = await db.connect();
+        const duckdbLib = window._duckdbLib;
+
+        progBar.style.width = '30%';
+
+        // TAHAP 1: Load File Master Lama (Mode Inject/Append)
         if (mode === 'inject') {
-            progStatus.innerText = "Memuat File Master ke memori...";
-            await new Promise((resolve) => {
-                Papa.parse(masterFile, {
-                    header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
-                    chunk: function(results) {
-                        if(!isGlobalHeaderSet && results.data.length > 0) {
-                            finalHeaders = results.data[0]; // Ambil header dari master
-                            isGlobalHeaderSet = true;
-                        }
-                        allData.push(...results.data);
-                    },
-                    complete: resolve
-                });
-            });
+            progStatus.innerText = "Memuat File Master Parquet...";
+            await db.registerFileHandle('master.parquet', masterFile, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+            await conn.query(`CREATE TABLE master_table AS SELECT * FROM 'master.parquet'`);
         }
 
-        // Step 2: Proses File Baru (Konversi Kilat)
-        for(let i = 0; i < inputFiles.length; i++) {
+        // TAHAP 2: Proses File Input Baru
+        for (let i = 0; i < inputFiles.length; i++) {
             const file = inputFiles[i];
-            progStatus.innerText = `Menyuntikkan Data: ${file.name} (${i+1}/${inputFiles.length})...`;
-            let pct = Math.round(((i + 0.5) / inputFiles.length) * 100);
-            progBar.style.width = `${pct}%`;
-            document.getElementById('duckdb-percent').innerText = `${pct}%`;
+            let fileName = `input_${i}.csv`;
+            progStatus.innerText = `Memproses File: ${file.name} ...`;
 
-            await new Promise((resolve) => {
-                let isFirstRow = true;
-                let selectedIndices = [];
-
-                Papa.parse(file, {
-                    header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 10,
-                    chunk: function(results) {
-                        let rows = results.data;
-                        if (isFirstRow && rows.length > 0) {
-                            let rawHeader = rows[0];
-                            selectedIndices = getSelectedIndices(rawHeader);
-                            
-                            // Jika belum ada header (Create mode), buat header baru
-                            if (!isGlobalHeaderSet) {
-                                finalHeaders = selectedIndices.map(idx => rawHeader[idx]);
-                                allData.push(finalHeaders);
-                                isGlobalHeaderSet = true;
-                            }
-                            rows.shift(); // Buang header baris dari file input
-                            isFirstRow = false;
-                        }
-
-                        // Filter kolom secara kilat (hanya iterasi indeks yg diperlukan)
-                        rows.forEach(r => {
-                            let filteredRow = [];
-                            for(let k = 0; k < selectedIndices.length; k++) {
-                                filteredRow.push(r[selectedIndices[k]]);
-                            }
-                            allData.push(filteredRow);
-                        });
-                    },
-                    complete: resolve
+            if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+                const csvStr = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                        resolve(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
+                    };
+                    reader.readAsArrayBuffer(file);
                 });
-            });
+                await db.registerFileText(fileName, csvStr);
+            } else {
+                await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+            }
+
+            // VALIDASI HEADER KOLOM AGAR TIDAK KOSONG
+            const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
+            const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
+
+            let selectQuery = "*";
+            if (customCols.length > 0) {
+                let validCols = [];
+                if (colMode === 'keep') {
+                    validCols = customCols.filter(c => actualCols.includes(c));
+                    if(validCols.length === 0) {
+                        throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\nKolom asli yang tersedia: ${actualCols.join(', ')}`);
+                    }
+                } else if (colMode === 'drop') {
+                    validCols = actualCols.filter(c => !customCols.includes(c));
+                }
+                selectQuery = validCols.map(c => `"${c}"`).join(", ");
+            }
+
+            // QUERY EKSEKUSI SQL NATIVE
+            if (mode === 'create' && i === 0) {
+                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM '${fileName}'`);
+            } else {
+                await conn.query(`INSERT INTO master_table SELECT ${selectQuery} FROM '${fileName}'`);
+            }
         }
 
-        // Output Result (Simulasi format optimal untuk Power BI)
-        progStatus.innerText = "Menyimpan File Database...";
-        progBar.style.width = `100%`;
-        document.getElementById('duckdb-percent').innerText = `100%`;
-
-        const outName = mode === 'create' ? "Nadi_Master_DuckDB_Ready" : "Nadi_Master_DuckDB_Updated";
-        exportData(allData, 'duckdb_sim', outName);
+        // TAHAP 3: Generate File Format .parquet Asli
+        progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
+        progBar.style.width = '80%';
         
-        setTimeout(() => {
-            alert(`Berhasil memproses ${allData.length - 1} baris data!\nFile output dirancang dalam format CSV Teroptimasi (DuckDB-Ready) untuk performa Power BI yang instan.`);
-            progStatus.innerText = "Selesai!";
-            btn.disabled = false; btn.classList.remove('opacity-50');
-        }, 500);
+        await conn.query(`COPY master_table TO 'output.parquet' (FORMAT PARQUET)`);
+        const buffer = await db.copyFileToBuffer('output.parquet');
+        
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const outName = mode === 'create' ? "Nadi_Master_Data.parquet" : "Nadi_Master_Updated.parquet";
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = outName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        await conn.query(`DROP TABLE master_table`);
+        await conn.close();
+
+        progBar.style.width = '100%';
+        progStatus.innerText = "Selesai! File Parquet siap ditarik ke Power BI.";
+        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil diunduh.\nSekarang Anda bisa melakukan Get Data -> Parquet di Power BI secara instan tanpa lag!`), 300);
 
     } catch (e) {
-        alert("Terjadi kesalahan sistem: " + e.message);
+        alert("TERJADI KESALAHAN SISTEM:\n\n" + e.message);
+        progStatus.innerText = "Proses Dibatalkan.";
+    } finally {
         btn.disabled = false; btn.classList.remove('opacity-50');
     }
 }
-
 
 // --- 3. DATA SPLITTER LOGIC ---
 const statusMapping = {
@@ -570,7 +548,7 @@ async function startMerge() {
     btn.disabled = false; btn.classList.remove('opacity-50');
 }
 
-// --- 6. AUDIO & TEXT LOGIC (Tetap Sama) ---
+// --- 6. AUDIO & TEXT LOGIC ---
 const sttTextarea = document.getElementById('stt-result');
 const sttBtnToggle = document.getElementById('btn-stt-toggle');
 const sttBtnText = document.getElementById('stt-btn-text');
@@ -617,9 +595,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onresult = (event) => {
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript + ' ';
-            }
+            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
         }
         if (finalTranscript && sttTextarea) {
             sttTextarea.value += finalTranscript;
@@ -628,13 +604,8 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         }
     };
 
-    recognition.onerror = (event) => {
-        if(event.error === 'not-allowed') stopRecordingUI();
-    };
-
-    recognition.onend = () => {
-        if (isRecording) { try { recognition.start(); } catch(e) {} } else { stopRecordingUI(); }
-    };
+    recognition.onerror = (event) => { if(event.error === 'not-allowed') stopRecordingUI(); };
+    recognition.onend = () => { if (isRecording) { try { recognition.start(); } catch(e) {} } else { stopRecordingUI(); } };
 } else {
     if(sttBtnToggle) {
         sttBtnToggle.disabled = true;
@@ -653,11 +624,8 @@ function stopRecordingUI() {
 if(sttBtnToggle) {
     sttBtnToggle.addEventListener('click', () => {
         if(!recognition) return alert('Fitur ini tidak didukung di browser Anda.');
-        if(isRecording) {
-            isRecording = false; recognition.stop(); stopRecordingUI();
-        } else {
-            try { recognition.start(); } catch(e) {}
-        }
+        if(isRecording) { isRecording = false; recognition.stop(); stopRecordingUI(); } 
+        else { try { recognition.start(); } catch(e) {} }
     });
 }
 
@@ -682,7 +650,7 @@ function saveAudioText(type) {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
 }
 
-// Text to Audio 
+// Text to Audio
 const ttsInput = document.getElementById('tts-input');
 const btnTtsPlay = document.getElementById('btn-tts-play');
 const btnTtsStop = document.getElementById('btn-tts-stop');
@@ -704,12 +672,10 @@ if(btnTtsPlay) {
 }
 
 if(btnTtsStop) {
-    btnTtsStop.addEventListener('click', () => {
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    });
+    btnTtsStop.addEventListener('click', () => { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); });
 }
 
-// --- 7. GOOGLE MAPS SCRAPER LOGIC (Tetap Sama) ---
+// --- 7. GOOGLE MAPS SCRAPER LOGIC ---
 function downloadCustomGmapsTemplate() {
     try {
         const templateData = [ ["DATA_INPUT_UTAMA"], ["JNE Express Tomang Raya Jakarta"] ];
@@ -727,7 +693,6 @@ async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');
     if (!fileInput || fileInput.files.length === 0) return alert('Unggah file terlebih dahulu!');
     
-    // (Kode Scraper Google Maps tidak berubah sama sekali, sesuai aslinya)
     const options = {
         name: document.getElementById('opt-name').checked,
         latlong: document.getElementById('opt-latlong').checked,

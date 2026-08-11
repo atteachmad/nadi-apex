@@ -270,159 +270,364 @@ const statusMapping = {
 };
 
 // ==========================================================
-//                 FUNGSI DATA SPLITTER
+// 0. HELPER UNTUK BACA FILE EXCEL (.XLSX / .XLS) DAN INISIALISASI
+// ==========================================================
+function readExcelFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array', cellDates: true, raw: false });
+                if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+                    return resolve([]);
+                }
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                // Convert worksheet ke Array 2D (defval: '' menjaga posisi kolom tidak bergeser)
+                const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                resolve(rows || []);
+            } catch (err) {
+                reject(err);
+            }
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// Buka kunci input file HTML agar browser mengizinkan opsi file .xlsx & .xls
+document.addEventListener('DOMContentLoaded', () => {
+    const splitInput = document.getElementById('split-files');
+    const mergeInput = document.getElementById('merge-files');
+    if (splitInput) splitInput.setAttribute('accept', '.csv, .xlsx, .xls');
+    if (mergeInput) mergeInput.setAttribute('accept', '.csv, .xlsx, .xls');
+});
+
+
+// ==========================================================
+// 1. DATA SPLITTER LOGIC (MEMPROSES CSV & XLSX/XLS)
 // ==========================================================
 async function startSplit() {
     const files = document.getElementById('split-files').files;
-    const outFormat = document.getElementById('split-format').value;
+    const format = document.getElementById('split-format').value;
     
-    if (files.length === 0) {
-        alert("Silakan unggah file terlebih dahulu!");
-        return;
-    }
+    if (files.length === 0) return alert("Pilih minimal satu file (CSV / XLSX / XLS)!");
 
     const btn = document.getElementById('btn-run-split');
     const progCont = document.getElementById('split-progress-container');
     const progBar = document.getElementById('split-progress-bar');
+    const progPercent = document.getElementById('split-percent');
     const progStatus = document.getElementById('split-status');
 
-    // State UI Berjalan
-    btn.disabled = true; 
+    btn.disabled = true;
     btn.classList.add('opacity-50', 'cursor-not-allowed');
     if (progCont) progCont.classList.remove('hidden');
     if (progBar) progBar.style.width = '0%';
+    if (progPercent) progPercent.innerText = '0%';
+    if (progStatus) progStatus.innerText = 'Memulai pemisahan data...';
 
-    // Wadah Data
-    let closedData = [];
-    let openData = [];
-    let claimData = [];
-    let otsData = [];
-    let returnData = []; 
-
-    let headerRow = null;
+    let closedData = [], openData = [], claimData = [], otsData = [];
+    let header = null;
     let codingIndex = -1;
 
+    let totalFiles = files.length;
+    let processedFiles = 0;
+
     try {
-        for (let i = 0; i < files.length; i++) {
-            let file = files[i];
-            if (progStatus) progStatus.innerText = `Memproses File: ${file.name} (${i + 1}/${files.length})`;
+        for (let i = 0; i < totalFiles; i++) {
+            const file = files[i];
+            if (progStatus) progStatus.innerText = `Membaca ${file.name}...`;
 
-            await new Promise((resolve, reject) => {
-                // LOGIKA KHUSUS EXCEL (XLSX/XLS)
-                if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Ambil sbg array of arrays
-                            
-                            if (json.length > 0) {
-                                if (!headerRow) {
-                                    headerRow = json[0];
-                                    closedData.push(headerRow);
-                                    openData.push(headerRow);
-                                    claimData.push(headerRow);
-                                    otsData.push(headerRow);
-                                    returnData.push(headerRow);
-                                }
-                                
-                                const headersStr = json[0].map(h => String(h).trim().toUpperCase());
-                                codingIndex = headersStr.indexOf('CODING');
-                                
-                                if (codingIndex === -1) {
-                                    alert(`Kolom CODING tidak ditemukan di file ${file.name}. Melewati file ini.`);
-                                    return resolve();
-                                }
+            const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
-                                // Looping pemisahan baris dari Index 1 (melewati header Excel)
-                                for (let r = 1; r < json.length; r++) {
-                                    let row = json[r];
-                                    if (!row || row.length === 0) continue;
-                                    
-                                    let code = row[codingIndex];
-                                    let status = code && typeof statusMapping !== 'undefined' ? statusMapping[String(code).trim().toUpperCase()] : 'Open';
-                                    if (!status) status = 'Open';
-                                    
-                                    if (status.toUpperCase() === 'CLOSED') closedData.push(row);
-                                    else if (status.toUpperCase() === 'CLAIM') claimData.push(row);
-                                    else if (status.toUpperCase() === 'OTS') otsData.push(row);
-                                    else if (status.toUpperCase() === 'RETURN') returnData.push(row);
-                                    else openData.push(row);
-                                }
+            if (isExcel) {
+                // LOGIKA PROSES FILE EXCEL (.XLSX / .XLS)
+                let rows = await readExcelFile(file);
+                if (rows && rows.length > 0) {
+                    if (!header) {
+                        // Cari baris header yang mengandung kolom CODING di 10 baris pertama
+                        for (let r = 0; r < Math.min(rows.length, 10); r++) {
+                            if (!rows[r]) continue;
+                            let foundIdx = rows[r].findIndex(col => 
+                                String(col || '').trim().toUpperCase() === 'CODING' || 
+                                String(col || '').trim().toUpperCase().includes('CODING')
+                            );
+                            if (foundIdx !== -1) {
+                                header = rows[r];
+                                codingIndex = foundIdx;
+                                closedData.push(header);
+                                openData.push(header);
+                                claimData.push(header);
+                                otsData.push(header);
+                                rows = rows.slice(r + 1);
+                                break;
                             }
-                            resolve();
-                        } catch (err) {
-                            reject(err);
                         }
-                    };
-                    reader.onerror = reject;
-                    reader.readAsArrayBuffer(file);
-                } 
-                // LOGIKA KHUSUS CSV (PAPA PARSE CHUNK - MENGHINDARI CRASH MEMORI)
-                else {
+                    } else {
+                        // Jika header sudah tersimpan dari file sebelumnya, lewati baris header pada file ini
+                        for (let r = 0; r < Math.min(rows.length, 10); r++) {
+                            if (!rows[r]) continue;
+                            let foundIdx = rows[r].findIndex(col => 
+                                String(col || '').trim().toUpperCase() === 'CODING' || 
+                                String(col || '').trim().toUpperCase().includes('CODING')
+                            );
+                            if (foundIdx !== -1) {
+                                rows = rows.slice(r + 1);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (codingIndex !== -1) {
+                        for (let row of rows) {
+                            if (!row || row.length <= codingIndex) continue;
+                            let code = String(row[codingIndex] || '').trim().toUpperCase();
+                            if (!code) continue;
+
+                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code] : 'OPEN';
+                            if (cat === 'CLOSED') closedData.push(row);
+                            else if (cat === 'CLAIM') claimData.push(row);
+                            else if (cat === 'OTS') otsData.push(row);
+                            else openData.push(row);
+                        }
+                    }
+                }
+
+                processedFiles++;
+                let pct = Math.round((processedFiles / totalFiles) * 100);
+                if (progBar) progBar.style.width = pct + '%';
+                if (progPercent) progPercent.innerText = pct + '%';
+
+            } else {
+                // LOGIKA PROSES FILE CSV (PAPAPARSE CHUNKING)
+                await new Promise((resolve) => {
                     let isFirstRow = true;
                     Papa.parse(file, {
-                        header: false, 
-                        skipEmptyLines: true, 
-                        chunkSize: 1024 * 1024 * 5, // 5MB chunks
+                        chunkSize: 1024 * 1024 * 5, // 5MB
                         chunk: function(results) {
                             let rows = results.data;
-                            if (isFirstRow && rows.length > 0) {
-                                if (!headerRow) {
-                                    headerRow = rows[0];
-                                    closedData.push(headerRow);
-                                    openData.push(headerRow);
-                                    claimData.push(headerRow);
-                                    otsData.push(headerRow);
-                                    returnData.push(headerRow);
-                                }
-                                
-                                const headersStr = rows[0].map(h => String(h).trim().toUpperCase());
-                                codingIndex = headersStr.indexOf('CODING');
-                                rows.shift(); // Buang header global dari chunk awal
-                                isFirstRow = false;
-                            }
-                            
-                            if (codingIndex === -1) return; 
+                            if (rows.length === 0) return;
 
-                            for (let r = 0; r < rows.length; r++) {
-                                let row = rows[r];
-                                let code = row[codingIndex];
-                                let status = code && typeof statusMapping !== 'undefined' ? statusMapping[String(code).trim().toUpperCase()] : 'Open';
-                                if (!status) status = 'Open';
-                                
-                                if (status.toUpperCase() === 'CLOSED') closedData.push(row);
-                                else if (status.toUpperCase() === 'CLAIM') claimData.push(row);
-                                else if (status.toUpperCase() === 'OTS') otsData.push(row);
-                                else if (status.toUpperCase() === 'RETURN') returnData.push(row);
+                            if (!header) {
+                                for (let r = 0; r < Math.min(rows.length, 10); r++) {
+                                    if (!rows[r]) continue;
+                                    let foundIdx = rows[r].findIndex(col => 
+                                        String(col || '').trim().toUpperCase() === 'CODING' || 
+                                        String(col || '').trim().toUpperCase().includes('CODING')
+                                    );
+                                    if (foundIdx !== -1) {
+                                        header = rows[r];
+                                        codingIndex = foundIdx;
+                                        closedData.push(header);
+                                        openData.push(header);
+                                        claimData.push(header);
+                                        otsData.push(header);
+                                        rows = rows.slice(r + 1);
+                                        break;
+                                    }
+                                }
+                            } else if (isFirstRow) {
+                                for (let r = 0; r < Math.min(rows.length, 10); r++) {
+                                    if (!rows[r]) continue;
+                                    let foundIdx = rows[r].findIndex(col => 
+                                        String(col || '').trim().toUpperCase() === 'CODING' || 
+                                        String(col || '').trim().toUpperCase().includes('CODING')
+                                    );
+                                    if (foundIdx !== -1) {
+                                        rows = rows.slice(r + 1);
+                                        break;
+                                    }
+                                }
+                            }
+                            isFirstRow = false;
+
+                            if (codingIndex === -1) return;
+
+                            for (let row of rows) {
+                                if (!row || row.length <= codingIndex) continue;
+                                let code = String(row[codingIndex] || '').trim().toUpperCase();
+                                if (!code) continue;
+
+                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code] : 'OPEN';
+                                if (cat === 'CLOSED') closedData.push(row);
+                                else if (cat === 'CLAIM') claimData.push(row);
+                                else if (cat === 'OTS') otsData.push(row);
                                 else openData.push(row);
                             }
                         },
-                        complete: function() { resolve(); },
-                        error: function(err) { reject(err); }
+                        complete: function() {
+                            processedFiles++;
+                            let pct = Math.round((processedFiles / totalFiles) * 100);
+                            if (progBar) progBar.style.width = pct + '%';
+                            if (progPercent) progPercent.innerText = pct + '%';
+                            resolve();
+                        }
                     });
-                }
-            });
-
-            // Update Progress Bar
-            let pct = Math.round(((i + 1) / files.length) * 100);
-            if (progBar) progBar.style.width = pct + '%';
+                });
+            }
         }
 
-        if (progStatus) progStatus.innerText = "Mengunduh file hasil split...";
-        
-        // Eksekusi Export Data 
-        if (closedData.length > 1) exportData(closedData, outFormat, `Nadi_Split_Closed`);
-        if (openData.length > 1) exportData(openData, outFormat, `Nadi_Split_Open`);
-        if (claimData.length > 1) exportData(claimData, outFormat, `Nadi_Split_Claim`);
-        if (otsData.length > 1) exportData(otsData, outFormat, `Nadi_Split_OTS`);
-        if (returnData.length > 1) exportData(returnData, outFormat, `Nadi_Split_Return`);
+        if (progStatus) progStatus.innerText = 'Mengekspor data...';
+        await delay(300);
 
-        if (progStatus) progStatus.innerText = "Selesai! File berhasil diunduh.";
+        let exported = false;
+        if (closedData.length > 1) { exportData(closedData, format, 'DATA_CLOSED'); exported = true; }
+        if (openData.length > 1) { exportData(openData, format, 'DATA_OPEN'); exported = true; }
+        if (claimData.length > 1) { exportData(claimData, format, 'DATA_CLAIM'); exported = true; }
+        if (otsData.length > 1) { exportData(otsData, format, 'DATA_OTS'); exported = true; }
+
+        if (!exported) {
+            alert("Tidak ada data yang berhasil dipisahkan. Pastikan file memiliki kolom CODING.");
+            if (progStatus) progStatus.innerText = 'Gagal memisahkan data.';
+        } else {
+            if (progStatus) progStatus.innerText = 'Pemisahan selesai!';
+        }
     } catch (error) {
         alert("Terjadi kesalahan: " + error.message);
-        if (progStatus) progStatus.innerText = "Error saat memproses data.";
+        if (progStatus) progStatus.innerText = 'Error saat pemrosesan.';
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+
+// ==========================================================
+// 2. DATA MERGER LOGIC (MEMPROSES CSV & XLSX/XLS)
+// ==========================================================
+async function startMerge() {
+    const files = document.getElementById('merge-files').files;
+    const format = document.getElementById('merge-format').value;
+    const dupColName = document.getElementById('merge-dup-col') ? document.getElementById('merge-dup-col').value.trim() : '';
+
+    if (files.length === 0) return alert("Pilih minimal satu file (CSV / XLSX / XLS)!");
+
+    const btn = document.getElementById('btn-run-merge');
+    const progCont = document.getElementById('merge-progress-container');
+    const progBar = document.getElementById('merge-progress-bar');
+    const progPercent = document.getElementById('merge-percent');
+    const progStatus = document.getElementById('merge-status');
+
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    if (progCont) progCont.classList.remove('hidden');
+    if (progBar) progBar.style.width = '0%';
+    if (progPercent) progPercent.innerText = '0%';
+    if (progStatus) progStatus.innerText = 'Memulai penggabungan data...';
+
+    let mergedData = [];
+    let header = null;
+    let dupColIndex = -1;
+    let seenValues = new Set();
+
+    let totalFiles = files.length;
+    let processedFiles = 0;
+
+    try {
+        for (let i = 0; i < totalFiles; i++) {
+            const file = files[i];
+            if (progStatus) progStatus.innerText = `Membaca ${file.name}...`;
+
+            const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+
+            if (isExcel) {
+                // LOGIKA MERGER EXCEL (.XLSX / .XLS)
+                let rows = await readExcelFile(file);
+                if (rows && rows.length > 0) {
+                    if (!header) {
+                        header = rows[0];
+                        mergedData.push(header);
+                        rows = rows.slice(1);
+
+                        if (dupColName) {
+                            dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
+                        }
+                    } else {
+                        // Abaikan baris header untuk file ke-2 dan seterusnya
+                        rows = rows.slice(1);
+                    }
+
+                    for (let row of rows) {
+                        if (!row || row.length === 0) continue;
+
+                        if (dupColIndex !== -1 && row[dupColIndex] !== undefined) {
+                            let val = String(row[dupColIndex]).trim();
+                            if (val) {
+                                if (seenValues.has(val)) continue; // Abaikan baris jika nilai kolom kunci duplikat
+                                seenValues.add(val);
+                            }
+                        }
+                        mergedData.push(row);
+                    }
+                }
+
+                processedFiles++;
+                let pct = Math.round((processedFiles / totalFiles) * 100);
+                if (progBar) progBar.style.width = pct + '%';
+                if (progPercent) progPercent.innerText = pct + '%';
+
+            } else {
+                // LOGIKA MERGER CSV (PAPAPARSE CHUNKING)
+                await new Promise((resolve) => {
+                    let isFirstChunk = true;
+                    Papa.parse(file, {
+                        chunkSize: 1024 * 1024 * 5,
+                        chunk: function(results) {
+                            let rows = results.data;
+                            if (rows.length === 0) return;
+
+                            if (!header) {
+                                header = rows[0];
+                                mergedData.push(header);
+                                rows = rows.slice(1);
+
+                                if (dupColName) {
+                                    dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
+                                }
+                            } else if (isFirstChunk) {
+                                rows = rows.slice(1);
+                            }
+                            isFirstChunk = false;
+
+                            for (let row of rows) {
+                                if (!row || row.length === 0) continue;
+
+                                if (dupColIndex !== -1 && row[dupColIndex] !== undefined) {
+                                    let val = String(row[dupColIndex]).trim();
+                                    if (val) {
+                                        if (seenValues.has(val)) continue;
+                                        seenValues.add(val);
+                                    }
+                                }
+                                mergedData.push(row);
+                            }
+                        },
+                        complete: function() {
+                            processedFiles++;
+                            let pct = Math.round((processedFiles / totalFiles) * 100);
+                            if (progBar) progBar.style.width = pct + '%';
+                            if (progPercent) progPercent.innerText = pct + '%';
+                            resolve();
+                        }
+                    });
+                });
+            }
+        }
+
+        if (progStatus) progStatus.innerText = 'Mengekspor data gabungan...';
+        await delay(300);
+
+        if (mergedData.length > 1) {
+            exportData(mergedData, format, `DATA_MERGED_${new Date().getTime()}`);
+            if (progStatus) progStatus.innerText = 'Penggabungan selesai!';
+        } else {
+            alert("Tidak ada data yang berhasil digabungkan.");
+            if (progStatus) progStatus.innerText = 'Gagal menggabungkan data.';
+        }
+    } catch (error) {
+        alert("Terjadi kesalahan: " + error.message);
+        if (progStatus) progStatus.innerText = 'Error saat pemrosesan.';
     } finally {
         btn.disabled = false;
         btn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -519,173 +724,6 @@ async function startRowSplit() {
 
     progStatus.innerText = "Pemotongan Selesai!";
     btn.disabled = false; btn.classList.remove('opacity-50');
-}
-
-// ==========================================================
-//                 FUNGSI DATA MERGER
-// ==========================================================
-async function startMerge() {
-    const files = document.getElementById('merge-files').files;
-    const outFormat = document.getElementById('merge-format').value;
-    const mergeDupColInput = document.getElementById('merge-dup-col');
-    const colRaw = mergeDupColInput ? mergeDupColInput.value : ""; 
-    
-    if (files.length === 0) {
-        alert("Silakan unggah minimal 1 file untuk digabungkan!");
-        return;
-    }
-
-    const btn = document.getElementById('btn-run-merge');
-    const progCont = document.getElementById('merge-progress-container');
-    const progBar = document.getElementById('merge-progress-bar');
-    const progStatus = document.getElementById('merge-status');
-
-    btn.disabled = true; 
-    btn.classList.add('opacity-50', 'cursor-not-allowed');
-    if (progCont) progCont.classList.remove('hidden');
-    if (progBar) progBar.style.width = '0%';
-
-    let globalHeader = null;
-    let masterData = [];
-    let seenValues = new Set();
-    let dupIndex = -1;
-    let currentBytes = 0;
-    let partCounter = 1;
-
-    try {
-        for (let i = 0; i < files.length; i++) {
-            let file = files[i];
-            if (progStatus) progStatus.innerText = `Menggabungkan: ${file.name} (${i + 1}/${files.length})`;
-
-            await new Promise((resolve, reject) => {
-                // LOGIKA KHUSUS EXCEL (XLSX/XLS)
-                if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        try {
-                            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                            
-                            if (json.length > 0) {
-                                let rows = json;
-                                
-                                if (!globalHeader) {
-                                    globalHeader = rows[0];
-                                    masterData.push(globalHeader);
-                                    currentBytes = globalHeader.join(",").length;
-                                    
-                                    if (colRaw && colRaw.trim() !== "") {
-                                        dupIndex = globalHeader.map(h => String(h).trim().toUpperCase()).indexOf(colRaw.trim().toUpperCase());
-                                    }
-                                }
-                                // Hapus header di semua file (karena yg pertama sudah dimasukkan di kondisi atas)
-                                rows.shift(); 
-
-                                for (let r = 0; r < rows.length; r++) {
-                                    let row = rows[r];
-                                    if (!row || row.length === 0) continue;
-
-                                    if (dupIndex !== -1 && row[dupIndex] !== undefined) {
-                                        let cellVal = String(row[dupIndex]).trim();
-                                        if (cellVal) {
-                                            if (seenValues.has(cellVal)) continue; // Bypass jika data duplikat Global
-                                            seenValues.add(cellVal);
-                                        }
-                                    }
-                                    
-                                    masterData.push(row);
-                                    currentBytes += row.join(",").length;
-
-                                    // Mengecek part-splitting agar Browser tidak crash
-                                    let isLimitReached = outFormat === 'csv' ? (currentBytes >= MAX_BYTES) : (masterData.length >= MAX_EXCEL_ROWS);
-                                    if (isLimitReached) {
-                                        exportData(masterData, outFormat, `Nadi_Merged_Part${partCounter}`);
-                                        partCounter++;
-                                        masterData = [globalHeader];
-                                        currentBytes = globalHeader.join(",").length;
-                                    }
-                                }
-                            }
-                            resolve();
-                        } catch (err) {
-                            reject(err);
-                        }
-                    };
-                    reader.onerror = reject;
-                    reader.readAsArrayBuffer(file);
-                } 
-                // LOGIKA KHUSUS CSV (PAPA PARSE CHUNK)
-                else {
-                    let isFirstRow = true;
-                    Papa.parse(file, {
-                        header: false, 
-                        skipEmptyLines: true, 
-                        chunkSize: 1024 * 1024 * 5,
-                        chunk: function(results) {
-                            let rows = results.data;
-                            if (isFirstRow) {
-                                if (!globalHeader && rows.length > 0) {
-                                    globalHeader = rows[0];
-                                    masterData.push(globalHeader);
-                                    currentBytes += globalHeader.join(",").length;
-                                    
-                                    if (colRaw && colRaw.trim() !== "") {
-                                        dupIndex = globalHeader.map(h => String(h).trim().toUpperCase()).indexOf(colRaw.trim().toUpperCase());
-                                    }
-                                }
-                                rows.shift(); 
-                                isFirstRow = false;
-                            }
-                            
-                            for (let r = 0; r < rows.length; r++) {
-                                let row = rows[r];
-                                if (dupIndex !== -1 && row[dupIndex] !== undefined) {
-                                    let cellVal = String(row[dupIndex]).trim();
-                                    if (cellVal) {
-                                        if (seenValues.has(cellVal)) continue;
-                                        seenValues.add(cellVal);
-                                    }
-                                }
-                                
-                                masterData.push(row);
-                                currentBytes += row.join(",").length;
-                            }
-
-                            let isLimitReached = outFormat === 'csv' ? (currentBytes >= MAX_BYTES) : (masterData.length >= MAX_EXCEL_ROWS);
-                            if (isLimitReached) {
-                                exportData(masterData, outFormat, `Nadi_Merged_Part${partCounter}`);
-                                partCounter++;
-                                masterData = [globalHeader];
-                                currentBytes = globalHeader.join(",").length;
-                            }
-                        },
-                        complete: function() { resolve(); },
-                        error: function(err) { reject(err); }
-                    });
-                }
-            });
-
-            // Update Progress Bar
-            let pct = Math.round(((i + 1) / files.length) * 100);
-            if (progBar) progBar.style.width = pct + '%';
-        }
-
-        if (progStatus) progStatus.innerText = "Mengunduh file hasil merge...";
-        
-        // Export sisa data yang belum mencapai limit ke part terakhir
-        if (masterData.length > 1) {
-            exportData(masterData, outFormat, partCounter > 1 ? `Nadi_Merged_Part${partCounter}` : `Nadi_Merged_Final`);
-        }
-
-        if (progStatus) progStatus.innerText = "Selesai! File berhasil digabungkan dan diunduh.";
-    } catch (error) {
-        alert("Terjadi kesalahan: " + error.message);
-        if (progStatus) progStatus.innerText = "Error saat memproses data.";
-    } finally {
-        btn.disabled = false;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-    }
 }
 
 // --- 6. AUDIO & TEXT LOGIC ---

@@ -269,97 +269,164 @@ const statusMapping = {
     'U14': 'Claim', 'C05': 'Claim', 'D24': 'Claim', 'D25': 'Claim', 'D37': 'Claim', 'C01': 'Claim', 'U37': 'Claim', 'R37': 'Claim', 'R26': 'Claim', 'R24': 'Claim', 'R25': 'Claim', 'D32': 'Claim', 'D31': 'Claim', 'D30': 'Claim', 'D29': 'Claim', 'D28': 'Claim', 'D27': 'Claim', 'C02': 'Claim', 'C01': 'Claim', 'C04': 'Claim', 'C06': 'Claim', 'D26': 'Claim', 'CR4': 'Claim', 'PS8': 'Claim', 'PS4': 'Claim', 'PS1': 'Claim',
 };
 
+// ==========================================================
+//                 FUNGSI DATA SPLITTER
+// ==========================================================
 async function startSplit() {
     const files = document.getElementById('split-files').files;
-    if (files.length === 0) return alert('Silakan pilih/tarik file terlebih dahulu!');
     const outFormat = document.getElementById('split-format').value;
     
+    if (files.length === 0) {
+        alert("Silakan unggah file terlebih dahulu!");
+        return;
+    }
+
     const btn = document.getElementById('btn-run-split');
     const progCont = document.getElementById('split-progress-container');
     const progBar = document.getElementById('split-progress-bar');
     const progStatus = document.getElementById('split-status');
-    
-    btn.disabled = true; btn.classList.add('opacity-50');
-    progCont.classList.remove('hidden');
-    
-    let memory = {
-        'Open': { data: [], bytes: 0, part: 1 },
-        'Closed': { data: [], bytes: 0, part: 1 },
-        'Return': { data: [], bytes: 0, part: 1 },
-        'Claim': { data: [], bytes: 0, part: 1 }
-    };
-    let headerRow = [];
 
-    for(let i = 0; i < files.length; i++) {
-        const file = files[i];
-        progStatus.innerText = `Memproses: ${file.name} (${i+1}/${files.length})`;
-        
-        await new Promise((resolve) => {
-            let isFirstRow = true;
-            let codingIndex = -1;
+    // State UI Berjalan
+    btn.disabled = true; 
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    if (progCont) progCont.classList.remove('hidden');
+    if (progBar) progBar.style.width = '0%';
 
-            Papa.parse(file, {
-                header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
-                chunk: function(results, parser) {
-                    let rows = results.data;
-                    if (isFirstRow && rows.length > 0) {
-                        headerRow = rows[0];
-                        const headersStr = headerRow.map(h => String(h).trim().toUpperCase());
-                        codingIndex = headersStr.indexOf('CODING');
-                        if (codingIndex === -1) {
-                            alert(`Kolom 'CODING' tidak ditemukan di file ${file.name}`);
-                            parser.abort(); return;
-                        }
-                        ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
-                            if(memory[cat].data.length === 0) memory[cat].data.push(headerRow);
-                        });
-                        rows.shift();
-                        isFirstRow = false;
-                    }
+    // Wadah Data
+    let closedData = [];
+    let openData = [];
+    let claimData = [];
+    let otsData = [];
+    let returnData = []; 
 
-                    rows.forEach(row => {
-                        let code = row[codingIndex];
-                        if(!code) code = 'BLANK';
-                        code = String(code).trim().toUpperCase();
-                        if(['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
+    let headerRow = null;
+    let codingIndex = -1;
 
-                        const status = statusMapping[code];
-                        if(status && memory[status]) {
-                            memory[status].data.push(row);
-                            memory[status].bytes += row.join(",").length;
+    try {
+        for (let i = 0; i < files.length; i++) {
+            let file = files[i];
+            if (progStatus) progStatus.innerText = `Memproses File: ${file.name} (${i + 1}/${files.length})`;
+
+            await new Promise((resolve, reject) => {
+                // LOGIKA KHUSUS EXCEL (XLSX/XLS)
+                if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Ambil sbg array of arrays
                             
-                            let isLimitReached = outFormat === 'csv' ? 
-                                (memory[status].bytes >= MAX_BYTES) : 
-                                (memory[status].data.length >= MAX_EXCEL_ROWS);
+                            if (json.length > 0) {
+                                if (!headerRow) {
+                                    headerRow = json[0];
+                                    closedData.push(headerRow);
+                                    openData.push(headerRow);
+                                    claimData.push(headerRow);
+                                    otsData.push(headerRow);
+                                    returnData.push(headerRow);
+                                }
                                 
-                            if(isLimitReached) {
-                                exportData(memory[status].data, outFormat, `${status}_Part${memory[status].part}`);
-                                memory[status].part++;
-                                memory[status].data = [headerRow];
-                                memory[status].bytes = 0;
+                                const headersStr = json[0].map(h => String(h).trim().toUpperCase());
+                                codingIndex = headersStr.indexOf('CODING');
+                                
+                                if (codingIndex === -1) {
+                                    alert(`Kolom CODING tidak ditemukan di file ${file.name}. Melewati file ini.`);
+                                    return resolve();
+                                }
+
+                                // Looping pemisahan baris dari Index 1 (melewati header Excel)
+                                for (let r = 1; r < json.length; r++) {
+                                    let row = json[r];
+                                    if (!row || row.length === 0) continue;
+                                    
+                                    let code = row[codingIndex];
+                                    let status = code && typeof statusMapping !== 'undefined' ? statusMapping[String(code).trim().toUpperCase()] : 'Open';
+                                    if (!status) status = 'Open';
+                                    
+                                    if (status.toUpperCase() === 'CLOSED') closedData.push(row);
+                                    else if (status.toUpperCase() === 'CLAIM') claimData.push(row);
+                                    else if (status.toUpperCase() === 'OTS') otsData.push(row);
+                                    else if (status.toUpperCase() === 'RETURN') returnData.push(row);
+                                    else openData.push(row);
+                                }
                             }
+                            resolve();
+                        } catch (err) {
+                            reject(err);
                         }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(file);
+                } 
+                // LOGIKA KHUSUS CSV (PAPA PARSE CHUNK - MENGHINDARI CRASH MEMORI)
+                else {
+                    let isFirstRow = true;
+                    Papa.parse(file, {
+                        header: false, 
+                        skipEmptyLines: true, 
+                        chunkSize: 1024 * 1024 * 5, // 5MB chunks
+                        chunk: function(results) {
+                            let rows = results.data;
+                            if (isFirstRow && rows.length > 0) {
+                                if (!headerRow) {
+                                    headerRow = rows[0];
+                                    closedData.push(headerRow);
+                                    openData.push(headerRow);
+                                    claimData.push(headerRow);
+                                    otsData.push(headerRow);
+                                    returnData.push(headerRow);
+                                }
+                                
+                                const headersStr = rows[0].map(h => String(h).trim().toUpperCase());
+                                codingIndex = headersStr.indexOf('CODING');
+                                rows.shift(); // Buang header global dari chunk awal
+                                isFirstRow = false;
+                            }
+                            
+                            if (codingIndex === -1) return; 
+
+                            for (let r = 0; r < rows.length; r++) {
+                                let row = rows[r];
+                                let code = row[codingIndex];
+                                let status = code && typeof statusMapping !== 'undefined' ? statusMapping[String(code).trim().toUpperCase()] : 'Open';
+                                if (!status) status = 'Open';
+                                
+                                if (status.toUpperCase() === 'CLOSED') closedData.push(row);
+                                else if (status.toUpperCase() === 'CLAIM') claimData.push(row);
+                                else if (status.toUpperCase() === 'OTS') otsData.push(row);
+                                else if (status.toUpperCase() === 'RETURN') returnData.push(row);
+                                else openData.push(row);
+                            }
+                        },
+                        complete: function() { resolve(); },
+                        error: function(err) { reject(err); }
                     });
-                },
-                complete: function() { resolve(); }
+                }
             });
-        });
-        
-        let pct = Math.round(((i + 1) / files.length) * 100);
-        progBar.style.width = `${pct}%`;
-        document.getElementById('split-percent').innerText = `${pct}%`;
-    }
 
-    ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
-        if(memory[cat].data.length > 1) { 
-            let fname = memory[cat].part > 1 ? `${cat}_Part${memory[cat].part}` : cat;
-            exportData(memory[cat].data, outFormat, fname);
+            // Update Progress Bar
+            let pct = Math.round(((i + 1) / files.length) * 100);
+            if (progBar) progBar.style.width = pct + '%';
         }
-    });
 
-    progStatus.innerText = "Selesai!";
-    btn.disabled = false; btn.classList.remove('opacity-50');
-    alert('Pemotongan selesai!');
+        if (progStatus) progStatus.innerText = "Mengunduh file hasil split...";
+        
+        // Eksekusi Export Data 
+        if (closedData.length > 1) exportData(closedData, outFormat, `Nadi_Split_Closed`);
+        if (openData.length > 1) exportData(openData, outFormat, `Nadi_Split_Open`);
+        if (claimData.length > 1) exportData(claimData, outFormat, `Nadi_Split_Claim`);
+        if (otsData.length > 1) exportData(otsData, outFormat, `Nadi_Split_OTS`);
+        if (returnData.length > 1) exportData(returnData, outFormat, `Nadi_Split_Return`);
+
+        if (progStatus) progStatus.innerText = "Selesai! File berhasil diunduh.";
+    } catch (error) {
+        alert("Terjadi kesalahan: " + error.message);
+        if (progStatus) progStatus.innerText = "Error saat memproses data.";
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
 }
 
 // --- 4. SPLIT BY ROWS LOGIC ---
@@ -454,102 +521,171 @@ async function startRowSplit() {
     btn.disabled = false; btn.classList.remove('opacity-50');
 }
 
-// --- 5. DATA MERGER LOGIC ---
+// ==========================================================
+//                 FUNGSI DATA MERGER
+// ==========================================================
 async function startMerge() {
     const files = document.getElementById('merge-files').files;
-    if (files.length === 0) return alert('Pilih/tarik file untuk digabung!');
     const outFormat = document.getElementById('merge-format').value;
-    const baseName = document.getElementById('merge-filename').value || 'Gabungan';
-    const dupColInput = document.getElementById('merge-duplicate-col').value.trim().toUpperCase();
+    const mergeDupColInput = document.getElementById('merge-dup-col');
+    const colRaw = mergeDupColInput ? mergeDupColInput.value : ""; 
+    
+    if (files.length === 0) {
+        alert("Silakan unggah minimal 1 file untuk digabungkan!");
+        return;
+    }
 
     const btn = document.getElementById('btn-run-merge');
     const progCont = document.getElementById('merge-progress-container');
     const progBar = document.getElementById('merge-progress-bar');
     const progStatus = document.getElementById('merge-status');
-    
-    btn.disabled = true; btn.classList.add('opacity-50');
-    progCont.classList.remove('hidden');
 
+    btn.disabled = true; 
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    if (progCont) progCont.classList.remove('hidden');
+    if (progBar) progBar.style.width = '0%';
+
+    let globalHeader = null;
     let masterData = [];
-    let headerWritten = false;
-    let partCounter = 1;
-    let currentBytes = 0;
     let seenValues = new Set();
-    let dupColIndex = -1;
-    let globalHeader = [];
+    let dupIndex = -1;
+    let currentBytes = 0;
+    let partCounter = 1;
 
-    for(let i = 0; i < files.length; i++) {
-        const file = files[i];
-        progStatus.innerText = `Menumpuk: ${file.name} (${i+1}/${files.length})`;
-        
-        await new Promise((resolve) => {
-            let isFirstRow = true;
-            Papa.parse(file, {
-                header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
-                chunk: function(results) {
-                    let rows = results.data;
-                    if(rows.length === 0) return;
-                    
-                    if (isFirstRow) {
-                        if (!headerWritten) {
-                            globalHeader = rows.shift();
-                            masterData.push(globalHeader);
-                            currentBytes += globalHeader.join(",").length;
+    try {
+        for (let i = 0; i < files.length; i++) {
+            let file = files[i];
+            if (progStatus) progStatus.innerText = `Menggabungkan: ${file.name} (${i + 1}/${files.length})`;
+
+            await new Promise((resolve, reject) => {
+                // LOGIKA KHUSUS EXCEL (XLSX/XLS)
+                if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                             
-                            if (dupColInput) {
-                                const upperHeaders = globalHeader.map(h => String(h).trim().toUpperCase());
-                                dupColIndex = upperHeaders.indexOf(dupColInput);
-                                if (dupColIndex === -1) {
-                                    alert(`Peringatan: Kolom '${document.getElementById('merge-duplicate-col').value}' tidak ditemukan di file pertama. Penggabungan dilanjutkan tanpa filter duplikat.`);
+                            if (json.length > 0) {
+                                let rows = json;
+                                
+                                if (!globalHeader) {
+                                    globalHeader = rows[0];
+                                    masterData.push(globalHeader);
+                                    currentBytes = globalHeader.join(",").length;
+                                    
+                                    if (colRaw && colRaw.trim() !== "") {
+                                        dupIndex = globalHeader.map(h => String(h).trim().toUpperCase()).indexOf(colRaw.trim().toUpperCase());
+                                    }
+                                }
+                                // Hapus header di semua file (karena yg pertama sudah dimasukkan di kondisi atas)
+                                rows.shift(); 
+
+                                for (let r = 0; r < rows.length; r++) {
+                                    let row = rows[r];
+                                    if (!row || row.length === 0) continue;
+
+                                    if (dupIndex !== -1 && row[dupIndex] !== undefined) {
+                                        let cellVal = String(row[dupIndex]).trim();
+                                        if (cellVal) {
+                                            if (seenValues.has(cellVal)) continue; // Bypass jika data duplikat Global
+                                            seenValues.add(cellVal);
+                                        }
+                                    }
+                                    
+                                    masterData.push(row);
+                                    currentBytes += row.join(",").length;
+
+                                    // Mengecek part-splitting agar Browser tidak crash
+                                    let isLimitReached = outFormat === 'csv' ? (currentBytes >= MAX_BYTES) : (masterData.length >= MAX_EXCEL_ROWS);
+                                    if (isLimitReached) {
+                                        exportData(masterData, outFormat, `Nadi_Merged_Part${partCounter}`);
+                                        partCounter++;
+                                        masterData = [globalHeader];
+                                        currentBytes = globalHeader.join(",").length;
+                                    }
                                 }
                             }
-                            headerWritten = true;
-                        } else {
-                            rows.shift();
+                            resolve();
+                        } catch (err) {
+                            reject(err);
                         }
-                        isFirstRow = false;
-                    }
-
-                    rows.forEach(r => {
-                        if (dupColIndex !== -1) {
-                            const cellVal = String(r[dupColIndex] || '').trim().toUpperCase();
-                            if (cellVal !== '') {
-                                if (seenValues.has(cellVal)) return;
-                                seenValues.add(cellVal);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsArrayBuffer(file);
+                } 
+                // LOGIKA KHUSUS CSV (PAPA PARSE CHUNK)
+                else {
+                    let isFirstRow = true;
+                    Papa.parse(file, {
+                        header: false, 
+                        skipEmptyLines: true, 
+                        chunkSize: 1024 * 1024 * 5,
+                        chunk: function(results) {
+                            let rows = results.data;
+                            if (isFirstRow) {
+                                if (!globalHeader && rows.length > 0) {
+                                    globalHeader = rows[0];
+                                    masterData.push(globalHeader);
+                                    currentBytes += globalHeader.join(",").length;
+                                    
+                                    if (colRaw && colRaw.trim() !== "") {
+                                        dupIndex = globalHeader.map(h => String(h).trim().toUpperCase()).indexOf(colRaw.trim().toUpperCase());
+                                    }
+                                }
+                                rows.shift(); 
+                                isFirstRow = false;
                             }
-                        }
-                        
-                        masterData.push(r);
-                        currentBytes += r.join(",").length;
+                            
+                            for (let r = 0; r < rows.length; r++) {
+                                let row = rows[r];
+                                if (dupIndex !== -1 && row[dupIndex] !== undefined) {
+                                    let cellVal = String(row[dupIndex]).trim();
+                                    if (cellVal) {
+                                        if (seenValues.has(cellVal)) continue;
+                                        seenValues.add(cellVal);
+                                    }
+                                }
+                                
+                                masterData.push(row);
+                                currentBytes += row.join(",").length;
+                            }
+
+                            let isLimitReached = outFormat === 'csv' ? (currentBytes >= MAX_BYTES) : (masterData.length >= MAX_EXCEL_ROWS);
+                            if (isLimitReached) {
+                                exportData(masterData, outFormat, `Nadi_Merged_Part${partCounter}`);
+                                partCounter++;
+                                masterData = [globalHeader];
+                                currentBytes = globalHeader.join(",").length;
+                            }
+                        },
+                        complete: function() { resolve(); },
+                        error: function(err) { reject(err); }
                     });
-
-                    let isLimitReached = outFormat === 'csv' ? 
-                        (currentBytes >= MAX_BYTES) : 
-                        (masterData.length >= MAX_EXCEL_ROWS);
-
-                    if(isLimitReached) {
-                        exportData(masterData, outFormat, `${baseName}_Part${partCounter}`);
-                        partCounter++;
-                        masterData = [globalHeader];
-                        currentBytes = globalHeader.join(",").length;
-                    }
-                },
-                complete: function() { resolve(); }
+                }
             });
-        });
 
-        let pct = Math.round(((i + 1) / files.length) * 100);
-        progBar.style.width = `${pct}%`;
-        document.getElementById('merge-percent').innerText = `${pct}%`;
+            // Update Progress Bar
+            let pct = Math.round(((i + 1) / files.length) * 100);
+            if (progBar) progBar.style.width = pct + '%';
+        }
+
+        if (progStatus) progStatus.innerText = "Mengunduh file hasil merge...";
+        
+        // Export sisa data yang belum mencapai limit ke part terakhir
+        if (masterData.length > 1) {
+            exportData(masterData, outFormat, partCounter > 1 ? `Nadi_Merged_Part${partCounter}` : `Nadi_Merged_Final`);
+        }
+
+        if (progStatus) progStatus.innerText = "Selesai! File berhasil digabungkan dan diunduh.";
+    } catch (error) {
+        alert("Terjadi kesalahan: " + error.message);
+        if (progStatus) progStatus.innerText = "Error saat memproses data.";
+    } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
-
-    if (masterData.length > 1) {
-        let fname = partCounter > 1 ? `${baseName}_Part${partCounter}` : baseName;
-        exportData(masterData, outFormat, fname);
-    }
-
-    progStatus.innerText = "Selesai digabung!";
-    btn.disabled = false; btn.classList.remove('opacity-50');
 }
 
 // --- 6. AUDIO & TEXT LOGIC ---

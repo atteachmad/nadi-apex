@@ -150,7 +150,7 @@ async function startParquetProcess() {
     const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
     const customColsRaw = document.getElementById('parquet-custom-columns').value;
     
-    // 1. Bersihkan Input Teks dari User (Trim spasi, tanda kutip, dan ubah ke UpperCase)
+    // 1. Ambil input user dan bersihkan
     const customCols = customColsRaw
         .split(',')
         .map(s => s.trim().replace(/^["']|["']$/g, '').toUpperCase())
@@ -177,109 +177,96 @@ async function startParquetProcess() {
         const conn = await db.connect();
         const duckdbLib = window._duckdbLib;
 
-        progBar.style.width = '20%';
+        progBar.style.width = '25%';
 
-        // TAHAP 1: Load File Master (Khusus Mode Inject/Append)
         if (mode === 'inject') {
             progStatus.innerText = "Memuat File Master Parquet...";
             await db.registerFileHandle('master.parquet', masterFile, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
             await conn.query(`CREATE TABLE master_table AS SELECT * FROM 'master.parquet'`);
         }
 
-        // TAHAP 2: Proses File Input Baru
         for (let i = 0; i < inputFiles.length; i++) {
             const file = inputFiles[i];
             progStatus.innerText = `Memproses File (${i+1}/${inputFiles.length}): ${file.name} ...`;
 
-            let fileDataArray = [];
+            let fileName = `input_${i}.csv`;
 
-            // 2A. Ekstraksi Data dari XLSX / XLS / CSV
+            // Konversi mulus XLSX ke CSV berstandar murni agar DuckDB membaca header secara natural
             if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                fileDataArray = await new Promise((resolve, reject) => {
+                const csvStr = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         try {
                             const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
                             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                            // Ambil data sebagai Array of Objects
-                            const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-                            resolve(json);
+                            resolve(XLSX.utils.sheet_to_csv(sheet, { FS: ",", RS: "\n" }));
                         } catch (err) { reject(err); }
                     };
                     reader.readAsArrayBuffer(file);
                 });
+                await db.registerFileText(fileName, csvStr);
             } else {
-                // Untuk File CSV
-                fileDataArray = await new Promise((resolve, reject) => {
-                    Papa.parse(file, {
-                        header: true,
-                        skipEmptyLines: true,
-                        dynamicTyping: false,
-                        complete: (results) => resolve(results.data),
-                        error: (err) => reject(err)
-                    });
-                });
+                await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
             }
 
-            if (!fileDataArray || fileDataArray.length === 0) {
-                throw new Error(`File ${file.name} kosong atau tidak memiliki data.`);
-            }
-
-            // 2B. Normalisasi Header File Asli (Hapus spasi liar, karakter tersembunyi & tanda kutip)
-            const rawHeaders = Object.keys(fileDataArray[0]);
-            const headerMap = {}; // Map dari Header_Upper -> Header_Asli_File
+            // 2. AMBIL NAMA KOLOM ASLI LANGSUNG DARI ENGINE DUCKDB (Case-Insensitive Map)
+            const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
+            const rawHeaderRows = resHeaders.toArray();
             
-            rawHeaders.forEach(h => {
-                const cleanKey = String(h).trim().replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, '').toUpperCase();
-                headerMap[cleanKey] = h;
+            // Map dari UPPERCASE -> Nama Asli Kolom di File (menghindari error case-sensitivity)
+            const headerMapping = {};
+            rawHeaderRows.forEach(r => {
+                const realName = r.column_name;
+                headerMapping[realName.toUpperCase()] = realName;
             });
 
-            const actualColsUpper = Object.keys(headerMap);
+            const availableUpperCols = Object.keys(headerMapping);
 
-            // 2C. Filter Kolom Sesuai Instruksi User
-            let targetColsUpper = [];
+            // 3. VALIDASI DAN PEMBENTUKAN QUERY SELEKSI KOLOM YANG AMAN
+            let selectColumnsQuery = "*";
+
             if (customCols.length > 0) {
+                let matchedRealCols = [];
+
                 if (colMode === 'keep') {
-                    targetColsUpper = customCols.filter(c => actualColsUpper.includes(c));
-                    if (targetColsUpper.length === 0) {
+                    // Cari kecocokan antara input user (uppercase) dengan kolom asli file
+                    customCols.forEach(userCol => {
+                        if (headerMapping[userCol]) {
+                            matchedRealCols.push(`"${headerMapping[userCol]}"`);
+                        }
+                    });
+
+                    if (matchedRealCols.length === 0) {
                         throw new Error(
-                            `Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di dalam file ${file.name}.\n\n` +
-                            `Kolom asli yang terdeteksi di Excel:\n${actualColsUpper.join(', ')}`
+                            `Kolom yang Anda minta (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\n` +
+                            `Kolom asli yang terbaca oleh sistem:\n${availableUpperCols.join(', ')}`
                         );
                     }
+                    selectColumnsQuery = matchedRealCols.join(", ");
                 } else if (colMode === 'drop') {
-                    targetColsUpper = actualColsUpper.filter(c => !customCols.includes(c));
+                    let colsToDrop = new Set(customCols);
+                    let remainingCols = rawHeaderRows
+                        .map(r => r.column_name)
+                        .filter(realName => !colsToDrop.has(realName.toUpperCase()));
+                    
+                    if (remainingCols.length === 0) throw new Error("Semua kolom terhapus!");
+                    selectColumnsQuery = remainingCols.map(c => `"${c}"`).join(", ");
                 }
-            } else {
-                targetColsUpper = actualColsUpper;
             }
 
-            // 2D. Filter & Bersihkan Data JSON sebelum Dimasukkan ke DuckDB
-            const filteredJSON = fileDataArray.map(row => {
-                const newRow = {};
-                targetColsUpper.forEach(colUpper => {
-                    const originalKey = headerMap[colUpper];
-                    newRow[colUpper] = row[originalKey] !== undefined ? String(row[originalKey]) : "";
-                });
-                return newRow;
-            });
-
-            // 2E. Masukkan JSON Langsung ke DuckDB Table
-            const jsonString = JSON.stringify(filteredJSON);
-            const fileNameTemp = `temp_data_${i}.json`;
-            await db.registerFileText(fileNameTemp, jsonString);
-
+            // 4. EKSEKUSI INSERT / CREATE TABLE KE DUCKDB
             if (mode === 'create' && i === 0) {
-                await conn.query(`CREATE TABLE master_table AS SELECT * FROM read_json_auto('${fileNameTemp}')`);
+                await conn.query(`CREATE TABLE master_table AS SELECT ${selectColumnsQuery} FROM '${fileName}'`);
             } else {
-                await conn.query(`INSERT INTO master_table SELECT * FROM read_json_auto('${fileNameTemp}')`);
+                // Jika mode inject, pastikan struktur kolom disesuaikan agar tidak mismatch
+                await conn.query(`INSERT INTO master_table SELECT ${selectColumnsQuery} FROM '${fileName}'`);
             }
 
-            let pct = Math.round(((i + 1) / inputFiles.length) * 60) + 20;
+            let pct = Math.round(((i + 1) / inputFiles.length) * 60) + 25;
             progBar.style.width = `${pct}%`;
         }
 
-        // TAHAP 3: Compile ke File Parquet Asli
+        // TAHAP 5: KOMPILASI KE FORMAT PARQUET ASLI
         progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
         progBar.style.width = '85%';
         
@@ -296,13 +283,13 @@ async function startParquetProcess() {
         link.click();
         document.body.removeChild(link);
 
-        // Membersihkan Memory Table
+        // Bersihkan memori tabel sementara
         await conn.query(`DROP TABLE master_table`);
         await conn.close();
 
         progBar.style.width = '100%';
-        progStatus.innerText = "Selesai! File Parquet berhasil dibuat.";
-        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil dibuat dengan kolom terfilter secara presisi.\nSiap digunakan di Power BI!`), 300);
+        progStatus.innerText = "Selesai! File Parquet siap ditarik ke Power BI.";
+        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil dibuat dan diunduh.\nSilakan lakukan Get Data di Power BI secara instan!`), 300);
 
     } catch (e) {
         alert("TERJADI KESALAHAN SISTEM:\n\n" + e.message);

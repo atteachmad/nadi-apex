@@ -153,7 +153,6 @@ async function startParquetProcess() {
     const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
     const customColsRaw = document.getElementById('parquet-custom-columns').value;
     
-    // Pembersihan input kustom menjadi array huruf besar
     const customCols = customColsRaw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
     const inputFiles = document.getElementById('parquet-input-files').files;
     const masterFile = document.getElementById('parquet-master-file').files[0];
@@ -178,14 +177,12 @@ async function startParquetProcess() {
 
         progBar.style.width = '30%';
 
-        // TAHAP 1: Load File Master (Khusus Mode Inject/Append)
         if (mode === 'inject') {
             progStatus.innerText = "Memuat File Master Parquet...";
             await db.registerFileHandle('master.parquet', masterFile, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
             await conn.query(`CREATE TABLE master_table AS SELECT * FROM 'master.parquet'`);
         }
 
-        // TAHAP 2: Proses File Input Baru
         for (let i = 0; i < inputFiles.length; i++) {
             const file = inputFiles[i];
             let fileName = `input_${i}.csv`;
@@ -205,7 +202,6 @@ async function startParquetProcess() {
                 await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
             }
 
-            // Validasi header untuk mencegah Parquet kosong
             const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
             const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
 
@@ -223,7 +219,6 @@ async function startParquetProcess() {
                 selectQuery = validCols.map(c => `"${c}"`).join(", ");
             }
 
-            // Pembuatan atau injeksi tabel menggunakan SQL di DuckDB
             if (mode === 'create' && i === 0) {
                 await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM '${fileName}'`);
             } else {
@@ -231,7 +226,6 @@ async function startParquetProcess() {
             }
         }
 
-        // TAHAP 3: Generate File .parquet Asli
         progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
         progBar.style.width = '80%';
         
@@ -248,7 +242,6 @@ async function startParquetProcess() {
         link.click();
         document.body.removeChild(link);
 
-        // Membersihkan Cache
         await conn.query(`DROP TABLE master_table`);
         await conn.close();
 
@@ -273,7 +266,7 @@ const statusMapping = {
 };
 
 // ==========================================================
-// 0. HELPER UNTUK BACA FILE EXCEL (.XLSX / .XLS) DAN INISIALISASI
+// 0. HELPER UNTUK BACA FILE EXCEL (.XLSX / .XLS) - VERSI REVISI SCAN SEMUA SHEET
 // ==========================================================
 function readExcelFile(file) {
     return new Promise((resolve, reject) => {
@@ -285,11 +278,33 @@ function readExcelFile(file) {
                 if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
                     return resolve([]);
                 }
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                // Convert worksheet ke Array 2D (defval: '' menjaga posisi kolom tidak bergeser)
-                const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-                resolve(rows || []);
+                
+                let bestRows = [];
+                // Cerdas: Scan semua sheet (Bukan cuma sheet pertama), untuk menangkal sheet kosong/hidden dari APEX
+                for (let sheetName of workbook.SheetNames) {
+                    const worksheet = workbook.Sheets[sheetName];
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                    
+                    let hasCoding = false;
+                    for(let i = 0; i < Math.min(rows.length, 200); i++) {
+                        let row = rows[i];
+                        if(!row || !Array.isArray(row)) continue;
+                        
+                        // Deteksi ekstrem: Bersihkan segala spasi atau metadata aneh
+                        if(row.some(col => String(col || '').toUpperCase().replace(/[^A-Z0-9]/g, '').includes('CODING'))) {
+                            hasCoding = true;
+                            break;
+                        }
+                    }
+                    
+                    if (hasCoding) {
+                        return resolve(rows); // Langsung kembalikan sheet valid yang ditemukan
+                    }
+                    
+                    // Fallback jika tidak menemukan CODING sama sekali
+                    if (rows.length > bestRows.length) bestRows = rows; 
+                }
+                resolve(bestRows);
             } catch (err) {
                 reject(err);
             }
@@ -299,14 +314,12 @@ function readExcelFile(file) {
     });
 }
 
-// Buka kunci input file HTML agar browser mengizinkan opsi file .xlsx & .xls
 document.addEventListener('DOMContentLoaded', () => {
     const splitInput = document.getElementById('split-files');
     const mergeInput = document.getElementById('merge-files');
     if (splitInput) splitInput.setAttribute('accept', '.csv, .xlsx, .xls');
     if (mergeInput) mergeInput.setAttribute('accept', '.csv, .xlsx, .xls');
 });
-
 
 // ==========================================================
 // 1. DATA SPLITTER LOGIC (MEMPROSES CSV & XLSX/XLS)
@@ -337,16 +350,16 @@ async function startSplit() {
     let totalFiles = files.length;
     let processedFiles = 0;
 
-    // FUNGSI HELPER: Mencari posisi kolom secara tahan banting dari karakter enter/spasi tersembunyi
+    // FUNGSI HELPER: Mencari posisi kolom secara super ketat tanpa memperdulikan jebakan karakter Excel
     const findHeaderIndex = (row) => {
-        if (!row) return -1;
-        return row.findIndex(col => {
-            let text = String(col || '').replace(/[\r\n]+/g, ' ').trim().toUpperCase();
-            return text === 'CODING' || text.includes('CODING');
-        });
+        if (!row || !Array.isArray(row)) return -1;
+        // 1. Prioritaskan kecocokan persis (Exact Match) bebas karakter siluman
+        let exact = row.findIndex(col => String(col || '').replace(/[^A-Z0-9]/ig, '').toUpperCase() === 'CODING');
+        if (exact !== -1) return exact;
+        // 2. Jika tetap tidak ada, ambil sel yang "mengandung" kata CODING
+        return row.findIndex(col => String(col || '').toUpperCase().includes('CODING'));
     };
 
-    // PENTING: Perlebar cakupan baris pencarian header untuk .xlsx yang memiliki banyak baris kosong di atasnya
     const SEARCH_LIMIT = 200; 
 
     try {
@@ -357,7 +370,6 @@ async function startSplit() {
             const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
             if (isExcel) {
-                // LOGIKA PROSES FILE EXCEL (.XLSX / .XLS)
                 let rows = await readExcelFile(file);
                 if (rows && rows.length > 0) {
                     if (!header) {
@@ -375,7 +387,6 @@ async function startSplit() {
                             }
                         }
                     } else {
-                        // Jika header sudah tersimpan dari file sebelumnya, lewati baris header pada file ini
                         for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                             let foundIdx = findHeaderIndex(rows[r]);
                             if (foundIdx !== -1) {
@@ -387,9 +398,13 @@ async function startSplit() {
 
                     if (codingIndex !== -1) {
                         for (let row of rows) {
-                            if (!row || row.length <= codingIndex) continue;
-                            let code = String(row[codingIndex] || '').trim().toUpperCase();
-                            if (!code) continue;
+                            // Revisi: Tidak lagi mengecek batas array yang terpotong untuk Excel
+                            if (!row || !Array.isArray(row)) continue;
+                            
+                            let codeVal = row[codingIndex];
+                            let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
+                            
+                            if (!code) continue; 
 
                             let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                             if (cat === 'CLOSED') closedData.push(row);
@@ -406,11 +421,11 @@ async function startSplit() {
                 if (progPercent) progPercent.innerText = pct + '%';
 
             } else {
-                // LOGIKA PROSES FILE CSV (PAPAPARSE CHUNKING)
+                // LOGIKA PROSES FILE CSV
                 await new Promise((resolve) => {
                     let isFirstRow = true;
                     Papa.parse(file, {
-                        chunkSize: 1024 * 1024 * 5, // 5MB
+                        chunkSize: 1024 * 1024 * 5,
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
@@ -443,8 +458,10 @@ async function startSplit() {
                             if (codingIndex === -1) return;
 
                             for (let row of rows) {
-                                if (!row || row.length <= codingIndex) continue;
-                                let code = String(row[codingIndex] || '').trim().toUpperCase();
+                                if (!row || !Array.isArray(row)) continue;
+                                let codeVal = row[codingIndex];
+                                let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
+                                
                                 if (!code) continue;
 
                                 let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
@@ -530,7 +547,6 @@ async function startMerge() {
             const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
             if (isExcel) {
-                // LOGIKA MERGER EXCEL (.XLSX / .XLS)
                 let rows = await readExcelFile(file);
                 if (rows && rows.length > 0) {
                     if (!header) {
@@ -542,7 +558,6 @@ async function startMerge() {
                             dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
                         }
                     } else {
-                        // Abaikan baris header untuk file ke-2 dan seterusnya
                         rows = rows.slice(1);
                     }
 
@@ -552,7 +567,7 @@ async function startMerge() {
                         if (dupColIndex !== -1 && row[dupColIndex] !== undefined) {
                             let val = String(row[dupColIndex]).trim();
                             if (val) {
-                                if (seenValues.has(val)) continue; // Abaikan baris jika nilai kolom kunci duplikat
+                                if (seenValues.has(val)) continue; 
                                 seenValues.add(val);
                             }
                         }
@@ -566,7 +581,6 @@ async function startMerge() {
                 if (progPercent) progPercent.innerText = pct + '%';
 
             } else {
-                // LOGIKA MERGER CSV (PAPAPARSE CHUNKING)
                 await new Promise((resolve) => {
                     let isFirstChunk = true;
                     Papa.parse(file, {

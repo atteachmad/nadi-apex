@@ -330,13 +330,24 @@ async function startSplit() {
     if (progPercent) progPercent.innerText = '0%';
     if (progStatus) progStatus.innerText = 'Memulai pemisahan data...';
 
-    // Perbaikan: Ubah otsData menjadi returnData
     let closedData = [], openData = [], claimData = [], returnData = [];
     let header = null;
     let codingIndex = -1;
 
     let totalFiles = files.length;
     let processedFiles = 0;
+
+    // FUNGSI HELPER: Mencari posisi kolom secara tahan banting dari karakter enter/spasi tersembunyi
+    const findHeaderIndex = (row) => {
+        if (!row) return -1;
+        return row.findIndex(col => {
+            let text = String(col || '').replace(/[\r\n]+/g, ' ').trim().toUpperCase();
+            return text === 'CODING' || text.includes('CODING');
+        });
+    };
+
+    // PENTING: Perlebar cakupan baris pencarian header untuk .xlsx yang memiliki banyak baris kosong di atasnya
+    const SEARCH_LIMIT = 200; 
 
     try {
         for (let i = 0; i < totalFiles; i++) {
@@ -350,13 +361,8 @@ async function startSplit() {
                 let rows = await readExcelFile(file);
                 if (rows && rows.length > 0) {
                     if (!header) {
-                        // Cari baris header yang mengandung kolom CODING di 10 baris pertama
-                        for (let r = 0; r < Math.min(rows.length, 10); r++) {
-                            if (!rows[r]) continue;
-                            let foundIdx = rows[r].findIndex(col => 
-                                String(col || '').trim().toUpperCase() === 'CODING' || 
-                                String(col || '').trim().toUpperCase().includes('CODING')
-                            );
+                        for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
+                            let foundIdx = findHeaderIndex(rows[r]);
                             if (foundIdx !== -1) {
                                 header = rows[r];
                                 codingIndex = foundIdx;
@@ -370,12 +376,8 @@ async function startSplit() {
                         }
                     } else {
                         // Jika header sudah tersimpan dari file sebelumnya, lewati baris header pada file ini
-                        for (let r = 0; r < Math.min(rows.length, 10); r++) {
-                            if (!rows[r]) continue;
-                            let foundIdx = rows[r].findIndex(col => 
-                                String(col || '').trim().toUpperCase() === 'CODING' || 
-                                String(col || '').trim().toUpperCase().includes('CODING')
-                            );
+                        for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
+                            let foundIdx = findHeaderIndex(rows[r]);
                             if (foundIdx !== -1) {
                                 rows = rows.slice(r + 1);
                                 break;
@@ -389,7 +391,6 @@ async function startSplit() {
                             let code = String(row[codingIndex] || '').trim().toUpperCase();
                             if (!code) continue;
 
-                            // Perbaikan logika mapping dan kategorisasi
                             let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                             if (cat === 'CLOSED') closedData.push(row);
                             else if (cat === 'CLAIM') claimData.push(row);
@@ -415,12 +416,8 @@ async function startSplit() {
                             if (rows.length === 0) return;
 
                             if (!header) {
-                                for (let r = 0; r < Math.min(rows.length, 10); r++) {
-                                    if (!rows[r]) continue;
-                                    let foundIdx = rows[r].findIndex(col => 
-                                        String(col || '').trim().toUpperCase() === 'CODING' || 
-                                        String(col || '').trim().toUpperCase().includes('CODING')
-                                    );
+                                for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
+                                    let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) {
                                         header = rows[r];
                                         codingIndex = foundIdx;
@@ -433,12 +430,8 @@ async function startSplit() {
                                     }
                                 }
                             } else if (isFirstRow) {
-                                for (let r = 0; r < Math.min(rows.length, 10); r++) {
-                                    if (!rows[r]) continue;
-                                    let foundIdx = rows[r].findIndex(col => 
-                                        String(col || '').trim().toUpperCase() === 'CODING' || 
-                                        String(col || '').trim().toUpperCase().includes('CODING')
-                                    );
+                                for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
+                                    let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) {
                                         rows = rows.slice(r + 1);
                                         break;
@@ -454,7 +447,6 @@ async function startSplit() {
                                 let code = String(row[codingIndex] || '').trim().toUpperCase();
                                 if (!code) continue;
 
-                                // Perbaikan logika mapping dan kategorisasi CSV
                                 let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                                 if (cat === 'CLOSED') closedData.push(row);
                                 else if (cat === 'CLAIM') claimData.push(row);
@@ -478,7 +470,6 @@ async function startSplit() {
         await delay(300);
 
         let exported = false;
-        // Perbaikan eksport data menggunakan arrays yang sudah sesuai
         if (closedData.length > 1) { exportData(closedData, format, 'DATA_CLOSED'); exported = true; }
         if (openData.length > 1) { exportData(openData, format, 'DATA_OPEN'); exported = true; }
         if (claimData.length > 1) { exportData(claimData, format, 'DATA_CLAIM'); exported = true; }

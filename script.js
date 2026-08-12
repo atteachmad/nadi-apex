@@ -5,6 +5,9 @@ tailwind.config = {
     }
 }
 
+// --- FUNGSI HELPER GLOBAL ---
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
 // --- 1. SIDEBAR TOGGLE & NAVIGATION LOGIC ---
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -263,7 +266,7 @@ async function startParquetProcess() {
 
 // --- 3. DATA SPLITTER LOGIC ---
 const statusMapping = {
-    'BY': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'BLANK': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'IP3': 'Open', 'HL5': 'Open', 'HL3': 'Open', 'HL1': 'Open', 'WH5': 'Open', 'HL4': 'Open', 'HL2': 'Open', 'T02': 'Open', 'X72': 'Open', 'X71': 'Open', 'X31': 'Open', 'BI2': 'Open', 'BI3': 'Open', 'WM': 'Open', 'DP3': 'Open', 'DP4': 'Open', 'CR7': 'Open', 'CR8': ' Open ',
+    'BY': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'BLANK': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'IP3': 'Open', 'HL5': 'Open', 'HL3': 'Open', 'HL1': 'Open', 'WH5': 'Open', 'HL4': 'Open', 'HL2': 'Open', 'T02': 'Open', 'X72': 'Open', 'X71': 'Open', 'X31': 'Open', 'BI2': 'Open', 'BI3': 'Open', 'WM': 'Open', 'DP3': 'Open', 'DP4': 'Open', 'CR7': 'Open', 'CR8': 'Open',
     'D01': 'Closed', 'D02': 'Closed', 'D03': 'Closed', 'D04': 'Closed', 'D05': 'Closed', 'D06': 'Closed', 'D07': 'Closed', 'D08': 'Closed', 'D09': 'Closed', 'D10': 'Closed', 'D11': 'Closed', 'D12': 'Closed', 'D15': 'Closed', 'D16': 'Closed', 'DB1': 'Closed', 'DB2': 'Closed', 'R01': 'Closed', 'R02': 'Closed', 'R03': 'Closed', 'R04': 'Closed', 'R05': 'Closed', 'R06': 'Closed', 'R07': 'Closed', 'R08': 'Closed', 'R09': 'Closed', 'R10': 'Closed', 'R11': 'Closed', 'R12': 'Closed', 'R13': 'Closed', 'DP5': 'Closed','D1': 'Closed', 'DP1': 'Closed', 'D18': 'Closed', 'D17': 'Closed', 'UF': 'Closed',
     'CR1': 'Return',
     'U14': 'Claim', 'C05': 'Claim', 'D24': 'Claim', 'D25': 'Claim', 'D37': 'Claim', 'C01': 'Claim', 'U37': 'Claim', 'R37': 'Claim', 'R26': 'Claim', 'R24': 'Claim', 'R25': 'Claim', 'D32': 'Claim', 'D31': 'Claim', 'D30': 'Claim', 'D29': 'Claim', 'D28': 'Claim', 'D27': 'Claim', 'C02': 'Claim', 'C01': 'Claim', 'C04': 'Claim', 'C06': 'Claim', 'D26': 'Claim', 'CR4': 'Claim', 'PS8': 'Claim', 'PS4': 'Claim', 'PS1': 'Claim',
@@ -327,7 +330,8 @@ async function startSplit() {
     if (progPercent) progPercent.innerText = '0%';
     if (progStatus) progStatus.innerText = 'Memulai pemisahan data...';
 
-    let closedData = [], openData = [], claimData = [], otsData = [];
+    // Perbaikan: Ubah otsData menjadi returnData
+    let closedData = [], openData = [], claimData = [], returnData = [];
     let header = null;
     let codingIndex = -1;
 
@@ -359,7 +363,7 @@ async function startSplit() {
                                 closedData.push(header);
                                 openData.push(header);
                                 claimData.push(header);
-                                otsData.push(header);
+                                returnData.push(header);
                                 rows = rows.slice(r + 1);
                                 break;
                             }
@@ -385,10 +389,11 @@ async function startSplit() {
                             let code = String(row[codingIndex] || '').trim().toUpperCase();
                             if (!code) continue;
 
-                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code] : 'OPEN';
+                            // Perbaikan logika mapping dan kategorisasi
+                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                             if (cat === 'CLOSED') closedData.push(row);
                             else if (cat === 'CLAIM') claimData.push(row);
-                            else if (cat === 'OTS') otsData.push(row);
+                            else if (cat === 'RETURN') returnData.push(row);
                             else openData.push(row);
                         }
                     }
@@ -422,7 +427,7 @@ async function startSplit() {
                                         closedData.push(header);
                                         openData.push(header);
                                         claimData.push(header);
-                                        otsData.push(header);
+                                        returnData.push(header);
                                         rows = rows.slice(r + 1);
                                         break;
                                     }
@@ -449,10 +454,11 @@ async function startSplit() {
                                 let code = String(row[codingIndex] || '').trim().toUpperCase();
                                 if (!code) continue;
 
-                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code] : 'OPEN';
+                                // Perbaikan logika mapping dan kategorisasi CSV
+                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                                 if (cat === 'CLOSED') closedData.push(row);
                                 else if (cat === 'CLAIM') claimData.push(row);
-                                else if (cat === 'OTS') otsData.push(row);
+                                else if (cat === 'RETURN') returnData.push(row);
                                 else openData.push(row);
                             }
                         },
@@ -472,10 +478,11 @@ async function startSplit() {
         await delay(300);
 
         let exported = false;
+        // Perbaikan eksport data menggunakan arrays yang sudah sesuai
         if (closedData.length > 1) { exportData(closedData, format, 'DATA_CLOSED'); exported = true; }
         if (openData.length > 1) { exportData(openData, format, 'DATA_OPEN'); exported = true; }
         if (claimData.length > 1) { exportData(claimData, format, 'DATA_CLAIM'); exported = true; }
-        if (otsData.length > 1) { exportData(otsData, format, 'DATA_OTS'); exported = true; }
+        if (returnData.length > 1) { exportData(returnData, format, 'DATA_RETURN'); exported = true; }
 
         if (!exported) {
             alert("Tidak ada data yang berhasil dipisahkan. Pastikan file memiliki kolom CODING.");
@@ -904,8 +911,6 @@ function downloadCustomGmapsTemplate() {
         alert("Terjadi kesalahan sistem saat membuat template. Pastikan memori browser Anda tidak penuh.");
     }
 }
-
-const delay = ms => new Promise(res => setTimeout(res, ms));
 
 async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');

@@ -512,8 +512,16 @@ async function startSplit() {
 // 2. DATA MERGER LOGIC (MEMPROSES CSV & XLSX/XLS)
 // ==========================================================
 async function startMerge() {
-    const files = document.getElementById('merge-files').files;
+const files = document.getElementById('merge-files').files;
     const format = document.getElementById('merge-format').value;
+    
+    // SESUAIKAN DARI SINI: Menangkap nilai input nama file dengan aman
+    const customNameInput = document.getElementById('merge-filename');
+    const outputFilename = (customNameInput && customNameInput.value.trim() !== '') 
+        ? customNameInput.value.trim() 
+        : `DATA_MERGED_${new Date().getTime()}`;
+    // SAMPAI SINI
+
     const dupColName = document.getElementById('merge-dup-col') ? document.getElementById('merge-dup-col').value.trim() : '';
 
     if (files.length === 0) return alert("Pilih minimal satu file (CSV / XLSX / XLS)!");
@@ -631,10 +639,7 @@ async function startMerge() {
         await delay(300);
 
 if (mergedData.length > 1) {
-            const customName = document.getElementById('merge-filename') ? document.getElementById('merge-filename').value.trim() : '';
-            const finalFileName = customName !== '' ? customName : `DATA_MERGED_${new Date().getTime()}`;
-            
-            exportData(mergedData, format, finalFileName);
+            exportData(mergedData, format, outputFilename); // Menggunakan variabel nama custom
             if (progStatus) progStatus.innerText = 'Penggabungan selesai!';
         } else {
             alert("Tidak ada data yang berhasil digabungkan.");

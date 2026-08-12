@@ -630,8 +630,11 @@ async function startMerge() {
         if (progStatus) progStatus.innerText = 'Mengekspor data gabungan...';
         await delay(300);
 
-        if (mergedData.length > 1) {
-            exportData(mergedData, format, `DATA_MERGED_${new Date().getTime()}`);
+if (mergedData.length > 1) {
+            const customName = document.getElementById('merge-filename') ? document.getElementById('merge-filename').value.trim() : '';
+            const finalFileName = customName !== '' ? customName : `DATA_MERGED_${new Date().getTime()}`;
+            
+            exportData(mergedData, format, finalFileName);
             if (progStatus) progStatus.innerText = 'Penggabungan selesai!';
         } else {
             alert("Tidak ada data yang berhasil digabungkan.");

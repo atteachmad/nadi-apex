@@ -150,8 +150,12 @@ async function startParquetProcess() {
     const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
     const customColsRaw = document.getElementById('parquet-custom-columns').value;
     
-    // Pembersihan input kustom menjadi array huruf besar
-    const customCols = customColsRaw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
+    // 1. Bersihkan Input Teks dari User (Trim spasi, tanda kutip, dan ubah ke UpperCase)
+    const customCols = customColsRaw
+        .split(',')
+        .map(s => s.trim().replace(/^["']|["']$/g, '').toUpperCase())
+        .filter(s => s.length > 0);
+
     const inputFiles = document.getElementById('parquet-input-files').files;
     const masterFile = document.getElementById('parquet-master-file').files[0];
 
@@ -173,7 +177,7 @@ async function startParquetProcess() {
         const conn = await db.connect();
         const duckdbLib = window._duckdbLib;
 
-        progBar.style.width = '30%';
+        progBar.style.width = '20%';
 
         // TAHAP 1: Load File Master (Khusus Mode Inject/Append)
         if (mode === 'inject') {
@@ -185,52 +189,99 @@ async function startParquetProcess() {
         // TAHAP 2: Proses File Input Baru
         for (let i = 0; i < inputFiles.length; i++) {
             const file = inputFiles[i];
-            let fileName = `input_${i}.csv`;
-            progStatus.innerText = `Memproses File: ${file.name} ...`;
+            progStatus.innerText = `Memproses File (${i+1}/${inputFiles.length}): ${file.name} ...`;
 
+            let fileDataArray = [];
+
+            // 2A. Ekstraksi Data dari XLSX / XLS / CSV
             if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                const csvStr = await new Promise((resolve) => {
+                fileDataArray = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
-                        resolve(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
+                        try {
+                            const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                            // Ambil data sebagai Array of Objects
+                            const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+                            resolve(json);
+                        } catch (err) { reject(err); }
                     };
                     reader.readAsArrayBuffer(file);
                 });
-                await db.registerFileText(fileName, csvStr);
             } else {
-                await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+                // Untuk File CSV
+                fileDataArray = await new Promise((resolve, reject) => {
+                    Papa.parse(file, {
+                        header: true,
+                        skipEmptyLines: true,
+                        dynamicTyping: false,
+                        complete: (results) => resolve(results.data),
+                        error: (err) => reject(err)
+                    });
+                });
             }
 
-            // Validasi header untuk mencegah Parquet kosong
-            const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
-            const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
+            if (!fileDataArray || fileDataArray.length === 0) {
+                throw new Error(`File ${file.name} kosong atau tidak memiliki data.`);
+            }
 
-            let selectQuery = "*";
+            // 2B. Normalisasi Header File Asli (Hapus spasi liar, karakter tersembunyi & tanda kutip)
+            const rawHeaders = Object.keys(fileDataArray[0]);
+            const headerMap = {}; // Map dari Header_Upper -> Header_Asli_File
+            
+            rawHeaders.forEach(h => {
+                const cleanKey = String(h).trim().replace(/^["']|["']$/g, '').replace(/[\r\n]+/g, '').toUpperCase();
+                headerMap[cleanKey] = h;
+            });
+
+            const actualColsUpper = Object.keys(headerMap);
+
+            // 2C. Filter Kolom Sesuai Instruksi User
+            let targetColsUpper = [];
             if (customCols.length > 0) {
-                let validCols = [];
                 if (colMode === 'keep') {
-                    validCols = customCols.filter(c => actualCols.includes(c));
-                    if(validCols.length === 0) {
-                        throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\nKolom asli yang tersedia: ${actualCols.join(', ')}`);
+                    targetColsUpper = customCols.filter(c => actualColsUpper.includes(c));
+                    if (targetColsUpper.length === 0) {
+                        throw new Error(
+                            `Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di dalam file ${file.name}.\n\n` +
+                            `Kolom asli yang terdeteksi di Excel:\n${actualColsUpper.join(', ')}`
+                        );
                     }
                 } else if (colMode === 'drop') {
-                    validCols = actualCols.filter(c => !customCols.includes(c));
+                    targetColsUpper = actualColsUpper.filter(c => !customCols.includes(c));
                 }
-                selectQuery = validCols.map(c => `"${c}"`).join(", ");
+            } else {
+                targetColsUpper = actualColsUpper;
             }
 
-            // Pembuatan atau injeksi tabel menggunakan SQL di DuckDB
+            // 2D. Filter & Bersihkan Data JSON sebelum Dimasukkan ke DuckDB
+            const filteredJSON = fileDataArray.map(row => {
+                const newRow = {};
+                targetColsUpper.forEach(colUpper => {
+                    const originalKey = headerMap[colUpper];
+                    newRow[colUpper] = row[originalKey] !== undefined ? String(row[originalKey]) : "";
+                });
+                return newRow;
+            });
+
+            // 2E. Masukkan JSON Langsung ke DuckDB Table
+            const jsonString = JSON.stringify(filteredJSON);
+            const fileNameTemp = `temp_data_${i}.json`;
+            await db.registerFileText(fileNameTemp, jsonString);
+
             if (mode === 'create' && i === 0) {
-                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM '${fileName}'`);
+                await conn.query(`CREATE TABLE master_table AS SELECT * FROM read_json_auto('${fileNameTemp}')`);
             } else {
-                await conn.query(`INSERT INTO master_table SELECT ${selectQuery} FROM '${fileName}'`);
+                await conn.query(`INSERT INTO master_table SELECT * FROM read_json_auto('${fileNameTemp}')`);
             }
+
+            let pct = Math.round(((i + 1) / inputFiles.length) * 60) + 20;
+            progBar.style.width = `${pct}%`;
         }
 
-        // TAHAP 3: Generate File .parquet Asli
+        // TAHAP 3: Compile ke File Parquet Asli
         progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
-        progBar.style.width = '80%';
+        progBar.style.width = '85%';
         
         await conn.query(`COPY master_table TO 'output.parquet' (FORMAT PARQUET)`);
         const buffer = await db.copyFileToBuffer('output.parquet');
@@ -245,13 +296,13 @@ async function startParquetProcess() {
         link.click();
         document.body.removeChild(link);
 
-        // Membersihkan Cache
+        // Membersihkan Memory Table
         await conn.query(`DROP TABLE master_table`);
         await conn.close();
 
         progBar.style.width = '100%';
-        progStatus.innerText = "Selesai! File Parquet siap ditarik ke Power BI.";
-        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil diunduh.\nSekarang Anda bisa melakukan Get Data -> Parquet di Power BI secara instan tanpa lag!`), 300);
+        progStatus.innerText = "Selesai! File Parquet berhasil dibuat.";
+        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil dibuat dengan kolom terfilter secara presisi.\nSiap digunakan di Power BI!`), 300);
 
     } catch (e) {
         alert("TERJADI KESALAHAN SISTEM:\n\n" + e.message);

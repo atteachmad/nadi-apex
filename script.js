@@ -150,12 +150,8 @@ async function startParquetProcess() {
     const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
     const customColsRaw = document.getElementById('parquet-custom-columns').value;
     
-    // 1. Ambil input user dan bersihkan
-    const customCols = customColsRaw
-        .split(',')
-        .map(s => s.trim().replace(/^["']|["']$/g, '').toUpperCase())
-        .filter(s => s.length > 0);
-
+    // Pembersihan input kustom menjadi array huruf besar
+    const customCols = customColsRaw.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0);
     const inputFiles = document.getElementById('parquet-input-files').files;
     const masterFile = document.getElementById('parquet-master-file').files[0];
 
@@ -177,30 +173,27 @@ async function startParquetProcess() {
         const conn = await db.connect();
         const duckdbLib = window._duckdbLib;
 
-        progBar.style.width = '25%';
+        progBar.style.width = '30%';
 
+        // TAHAP 1: Load File Master (Khusus Mode Inject/Append)
         if (mode === 'inject') {
             progStatus.innerText = "Memuat File Master Parquet...";
             await db.registerFileHandle('master.parquet', masterFile, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
             await conn.query(`CREATE TABLE master_table AS SELECT * FROM 'master.parquet'`);
         }
 
+        // TAHAP 2: Proses File Input Baru
         for (let i = 0; i < inputFiles.length; i++) {
             const file = inputFiles[i];
-            progStatus.innerText = `Memproses File (${i+1}/${inputFiles.length}): ${file.name} ...`;
-
             let fileName = `input_${i}.csv`;
+            progStatus.innerText = `Memproses File: ${file.name} ...`;
 
-            // Konversi mulus XLSX ke CSV berstandar murni agar DuckDB membaca header secara natural
             if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                const csvStr = await new Promise((resolve, reject) => {
+                const csvStr = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        try {
-                            const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
-                            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                            resolve(XLSX.utils.sheet_to_csv(sheet, { FS: ",", RS: "\n" }));
-                        } catch (err) { reject(err); }
+                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                        resolve(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
                     };
                     reader.readAsArrayBuffer(file);
                 });
@@ -209,66 +202,35 @@ async function startParquetProcess() {
                 await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
             }
 
-            // 2. AMBIL NAMA KOLOM ASLI LANGSUNG DARI ENGINE DUCKDB (Case-Insensitive Map)
+            // Validasi header untuk mencegah Parquet kosong
             const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
-            const rawHeaderRows = resHeaders.toArray();
-            
-            // Map dari UPPERCASE -> Nama Asli Kolom di File (menghindari error case-sensitivity)
-            const headerMapping = {};
-            rawHeaderRows.forEach(r => {
-                const realName = r.column_name;
-                headerMapping[realName.toUpperCase()] = realName;
-            });
+            const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
 
-            const availableUpperCols = Object.keys(headerMapping);
-
-            // 3. VALIDASI DAN PEMBENTUKAN QUERY SELEKSI KOLOM YANG AMAN
-            let selectColumnsQuery = "*";
-
+            let selectQuery = "*";
             if (customCols.length > 0) {
-                let matchedRealCols = [];
-
+                let validCols = [];
                 if (colMode === 'keep') {
-                    // Cari kecocokan antara input user (uppercase) dengan kolom asli file
-                    customCols.forEach(userCol => {
-                        if (headerMapping[userCol]) {
-                            matchedRealCols.push(`"${headerMapping[userCol]}"`);
-                        }
-                    });
-
-                    if (matchedRealCols.length === 0) {
-                        throw new Error(
-                            `Kolom yang Anda minta (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\n` +
-                            `Kolom asli yang terbaca oleh sistem:\n${availableUpperCols.join(', ')}`
-                        );
+                    validCols = customCols.filter(c => actualCols.includes(c));
+                    if(validCols.length === 0) {
+                        throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\nKolom asli yang tersedia: ${actualCols.join(', ')}`);
                     }
-                    selectColumnsQuery = matchedRealCols.join(", ");
                 } else if (colMode === 'drop') {
-                    let colsToDrop = new Set(customCols);
-                    let remainingCols = rawHeaderRows
-                        .map(r => r.column_name)
-                        .filter(realName => !colsToDrop.has(realName.toUpperCase()));
-                    
-                    if (remainingCols.length === 0) throw new Error("Semua kolom terhapus!");
-                    selectColumnsQuery = remainingCols.map(c => `"${c}"`).join(", ");
+                    validCols = actualCols.filter(c => !customCols.includes(c));
                 }
+                selectQuery = validCols.map(c => `"${c}"`).join(", ");
             }
 
-            // 4. EKSEKUSI INSERT / CREATE TABLE KE DUCKDB
+            // Pembuatan atau injeksi tabel menggunakan SQL di DuckDB
             if (mode === 'create' && i === 0) {
-                await conn.query(`CREATE TABLE master_table AS SELECT ${selectColumnsQuery} FROM '${fileName}'`);
+                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM '${fileName}'`);
             } else {
-                // Jika mode inject, pastikan struktur kolom disesuaikan agar tidak mismatch
-                await conn.query(`INSERT INTO master_table SELECT ${selectColumnsQuery} FROM '${fileName}'`);
+                await conn.query(`INSERT INTO master_table SELECT ${selectQuery} FROM '${fileName}'`);
             }
-
-            let pct = Math.round(((i + 1) / inputFiles.length) * 60) + 25;
-            progBar.style.width = `${pct}%`;
         }
 
-        // TAHAP 5: KOMPILASI KE FORMAT PARQUET ASLI
+        // TAHAP 3: Generate File .parquet Asli
         progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
-        progBar.style.width = '85%';
+        progBar.style.width = '80%';
         
         await conn.query(`COPY master_table TO 'output.parquet' (FORMAT PARQUET)`);
         const buffer = await db.copyFileToBuffer('output.parquet');
@@ -283,13 +245,13 @@ async function startParquetProcess() {
         link.click();
         document.body.removeChild(link);
 
-        // Bersihkan memori tabel sementara
+        // Membersihkan Cache
         await conn.query(`DROP TABLE master_table`);
         await conn.close();
 
         progBar.style.width = '100%';
         progStatus.innerText = "Selesai! File Parquet siap ditarik ke Power BI.";
-        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil dibuat dan diunduh.\nSilakan lakukan Get Data di Power BI secara instan!`), 300);
+        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil diunduh.\nSekarang Anda bisa melakukan Get Data -> Parquet di Power BI secara instan tanpa lag!`), 300);
 
     } catch (e) {
         alert("TERJADI KESALAHAN SISTEM:\n\n" + e.message);

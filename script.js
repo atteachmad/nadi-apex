@@ -372,191 +372,97 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function startSplit() {
     const files = document.getElementById('split-files').files;
-    const format = document.getElementById('split-format').value;
+    if (files.length === 0) return alert('Silakan pilih/tarik file terlebih dahulu!');
+    const outFormat = document.getElementById('split-format').value;
     
-    if (files.length === 0) return showToast("Pilih minimal satu file (CSV / XLSX / XLS)!", "error");
-
     const btn = document.getElementById('btn-run-split');
     const progCont = document.getElementById('split-progress-container');
     const progBar = document.getElementById('split-progress-bar');
-    const progPercent = document.getElementById('split-percent');
     const progStatus = document.getElementById('split-status');
-
-    btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
-    if (progCont) progCont.classList.remove('hidden');
-    if (progBar) progBar.style.width = '0%';
-    if (progPercent) progPercent.innerText = '0%';
-    if (progStatus) progStatus.innerText = 'Memulai pemisahan data...';
-
-    let closedData = [], openData = [], claimData = [], returnData = [];
-    let header = null;
-    let codingIndex = -1;
-    let headerLength = 0; // TAMBAHAN: Menyimpan panjang kolom header
-    let totalFiles = files.length;
-    let processedFiles = 0;
-
-    const findHeaderIndex = (row) => {
-        if (!row || !Array.isArray(row)) return -1;
-        let exact = row.findIndex(col => String(col || '').replace(/[^A-Z0-9]/ig, '').toUpperCase() === 'CODING');
-        if (exact !== -1) return exact;
-        return row.findIndex(col => String(col || '').toUpperCase().includes('CODING'));
+    
+    btn.disabled = true; btn.classList.add('opacity-50');
+    progCont.classList.remove('hidden');
+    
+    let memory = {
+        'Open': { data: [], bytes: 0, part: 1 },
+        'Closed': { data: [], bytes: 0, part: 1 },
+        'Return': { data: [], bytes: 0, part: 1 },
+        'Claim': { data: [], bytes: 0, part: 1 }
     };
-    const SEARCH_LIMIT = 200; 
+    let headerRow = [];
 
-    // ==========================================================
-    // HELPER: Standarisasi Data Cleansing & Normalization 
-    // ==========================================================
-    const processRow = (row) => {
-        if (!row || !Array.isArray(row)) return;
+    for(let i = 0; i < files.length; i++) {
+        const file = files[i];
+        progStatus.innerText = `Memproses: ${file.name} (${i+1}/${files.length})`;
         
-        // Lewati jika seluruh isi baris benar-benar kosong melompong (sisa enter)
-        if (row.join('').trim() === '') return;
+        await new Promise((resolve) => {
+            let isFirstRow = true;
+            let codingIndex = -1;
 
-        // ===============================================================
-        // KUNCI PERBAIKAN 1: Normalisasi Panjang Baris (Ragged Arrays Fix)
-        // Jika baris CSV lebih pendek dari header (sel buntung di kanan), tambahkan string kosong.
-        // ===============================================================
-        while (row.length < headerLength) {
-            row.push('');
-        }
-
-        let codeVal = row[codingIndex];
-        let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
-
-        // Parameter Logika: Jika kosong atau bernilai error, ubah jadi teks BLANK
-        if (['', 'NAN', 'NULL', '<NA>'].includes(code)) {
-            code = 'BLANK';
-            // ===============================================================
-            // KUNCI PERBAIKAN 2: Karena row sudah dipanjangkan di Kunci 1, 
-            // sekarang menyuntikkan 'BLANK' ke indeks ini pasti akan berhasil.
-            // ===============================================================
-            row[codingIndex] = 'BLANK'; 
-        }
-
-        // Penentuan kategori berdasarkan statusMapping
-        let cat = 'OPEN';
-        if (statusMapping[code]) {
-            cat = statusMapping[code].trim().toUpperCase();
-        }
-
-        // Distribusikan ke file yang tepat
-        if (cat === 'CLOSED') closedData.push(row);
-        else if (cat === 'CLAIM') claimData.push(row);
-        else if (cat === 'RETURN') returnData.push(row);
-        else openData.push(row); // Data BLANK akan otomatis masuk ke sini
-    };
-
-    try {
-        for (let i = 0; i < totalFiles; i++) {
-            const file = files[i];
-            if (progStatus) progStatus.innerText = `Membaca ${file.name}...`;
-
-            const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
-
-            if (isExcel) {
-                let rows = await readExcelFile(file);
-                if (rows && rows.length > 0) {
-                    if (!header) {
-                        for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
-                            let foundIdx = findHeaderIndex(rows[r]);
-                            if (foundIdx !== -1) {
-                                header = rows[r];
-                                codingIndex = foundIdx;
-                                headerLength = header.length; // Simpan panjang header
-                                closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
-                                rows = rows.slice(r + 1);
-                                break;
-                            }
+            Papa.parse(file, {
+                header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
+                chunk: function(results, parser) {
+                    let rows = results.data;
+                    if (isFirstRow && rows.length > 0) {
+                        headerRow = rows[0];
+                        const headersStr = headerRow.map(h => String(h).trim().toUpperCase());
+                        codingIndex = headersStr.indexOf('CODING');
+                        if (codingIndex === -1) {
+                            alert(`Kolom 'CODING' tidak ditemukan di file ${file.name}`);
+                            parser.abort(); return;
                         }
-                    } else {
-                        for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
-                            let foundIdx = findHeaderIndex(rows[r]);
-                            if (foundIdx !== -1) {
-                                rows = rows.slice(r + 1); break;
-                            }
-                        }
+                        ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
+                            if(memory[cat].data.length === 0) memory[cat].data.push(headerRow);
+                        });
+                        rows.shift();
+                        isFirstRow = false;
                     }
 
-                    if (codingIndex !== -1) {
-                        for (let row of rows) {
-                            processRow(row);
-                        }
-                    }
-                }
-                processedFiles++;
-                let pct = Math.round((processedFiles / totalFiles) * 100);
-                if (progBar) progBar.style.width = pct + '%';
-                if (progPercent) progPercent.innerText = pct + '%';
+                    rows.forEach(row => {
+                        let code = row[codingIndex];
+                        if(!code) code = 'BLANK';
+                        code = String(code).trim().toUpperCase();
+                        if(['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
 
-            } else {
-                await new Promise((resolve) => {
-                    let isFirstRow = true;
-                    Papa.parse(file, {
-                        chunkSize: 1024 * 1024 * 5,
-                        skipEmptyLines: true, 
-                        chunk: function(results) {
-                            let rows = results.data;
-                            if (rows.length === 0) return;
-                            if (!header) {
-                                for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
-                                    let foundIdx = findHeaderIndex(rows[r]);
-                                    if (foundIdx !== -1) {
-                                        header = rows[r]; 
-                                        codingIndex = foundIdx;
-                                        headerLength = header.length; // Simpan panjang header
-                                        closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
-                                        rows = rows.slice(r + 1); break;
-                                    }
-                                }
-                            } else if (isFirstRow) {
-                                for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
-                                    let foundIdx = findHeaderIndex(rows[r]);
-                                    if (foundIdx !== -1) { rows = rows.slice(r + 1); break; }
-                                }
-                            }
-                            isFirstRow = false;
+                        const status = statusMapping[code];
+                        if(status && memory[status]) {
+                            memory[status].data.push(row);
+                            memory[status].bytes += row.join(",").length;
                             
-                            if (codingIndex === -1) return;
-                            
-                            for (let row of rows) {
-                                processRow(row);
+                            let isLimitReached = outFormat === 'csv' ? 
+                                (memory[status].bytes >= MAX_BYTES) : 
+                                (memory[status].data.length >= MAX_EXCEL_ROWS);
+                                
+                            if(isLimitReached) {
+                                exportData(memory[status].data, outFormat, `${status}_Part${memory[status].part}`);
+                                memory[status].part++;
+                                memory[status].data = [headerRow];
+                                memory[status].bytes = 0;
                             }
-                        },
-                        complete: function() {
-                            processedFiles++;
-                            let pct = Math.round((processedFiles / totalFiles) * 100);
-                            if (progBar) progBar.style.width = pct + '%';
-                            if (progPercent) progPercent.innerText = pct + '%';
-                            resolve();
                         }
                     });
-                });
-            }
-        }
-
-        if (progStatus) progStatus.innerText = 'Mengekspor data...';
-        await delay(300);
-
-        let exported = false;
-        if (closedData.length > 1) { exportData(closedData, format, 'DATA_CLOSED'); exported = true; }
-        if (openData.length > 1) { exportData(openData, format, 'DATA_OPEN'); exported = true; }
-        if (claimData.length > 1) { exportData(claimData, format, 'DATA_CLAIM'); exported = true; }
-        if (returnData.length > 1) { exportData(returnData, format, 'DATA_RETURN'); exported = true; }
-
-        if (!exported) {
-            showToast("Tidak ada data yang berhasil dipisahkan. Pastikan file memiliki kolom CODING.", "error");
-            if (progStatus) progStatus.innerText = 'Gagal memisahkan data.';
-        } else {
-            if (progStatus) progStatus.innerText = 'Pemisahan selesai!';
-            showToast('Pemisahan Selesai! Klik tutup untuk segarkan aplikasi.', 'success', true);
-        }
-    } catch (error) {
-        showToast("Terjadi kesalahan: " + error.message, "error");
-        if (progStatus) progStatus.innerText = 'Error saat pemrosesan.';
-    } finally {
-        btn.disabled = false; btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                },
+                complete: function() { resolve(); }
+            });
+        });
+        
+        let pct = Math.round(((i + 1) / files.length) * 100);
+        progBar.style.width = `${pct}%`;
+        document.getElementById('split-percent').innerText = `${pct}%`;
     }
+
+    ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
+        if(memory[cat].data.length > 1) { 
+            let fname = memory[cat].part > 1 ? `${cat}_Part${memory[cat].part}` : cat;
+            exportData(memory[cat].data, outFormat, fname);
+        }
+    });
+
+    progStatus.innerText = "Selesai!";
+    btn.disabled = false; btn.classList.remove('opacity-50');
+    alert('Pemotongan selesai!');
 }
+
 
 // --- 2. DATA MERGER LOGIC ---
 async function startMerge() {

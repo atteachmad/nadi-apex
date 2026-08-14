@@ -410,6 +410,41 @@ async function startSplit() {
     };
     const SEARCH_LIMIT = 200; 
 
+    // ==========================================================
+    // HELPER: Standarisasi Data Cleansing & Normalization 
+    // ==========================================================
+    const processRow = (row) => {
+        if (!row || !Array.isArray(row)) return;
+        
+        // Lewati jika seluruh isi baris benar-benar kosong melompong (sisa enter)
+        if (row.join('').trim() === '') return;
+
+        let codeVal = row[codingIndex];
+        let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
+
+        // Parameter Logika: Jika kosong atau bernilai error, ubah jadi teks BLANK
+        if (['', 'NAN', 'NULL', '<NA>'].includes(code)) {
+            code = 'BLANK';
+            // ===============================================================
+            // KUNCI PERBAIKAN: Suntikkan/paksa sel array untuk berisi teks 'BLANK'.
+            // Mencegah baris buntung pada CSV sehingga pasti terbaca di Filter Excel.
+            // ===============================================================
+            row[codingIndex] = 'BLANK'; 
+        }
+
+        // Penentuan kategori berdasarkan statusMapping
+        let cat = 'OPEN';
+        if (statusMapping[code]) {
+            cat = statusMapping[code].trim().toUpperCase();
+        }
+
+        // Distribusikan ke file yang tepat
+        if (cat === 'CLOSED') closedData.push(row);
+        else if (cat === 'CLAIM') claimData.push(row);
+        else if (cat === 'RETURN') returnData.push(row);
+        else openData.push(row); // Data BLANK akan otomatis masuk ke sini
+    };
+
     try {
         for (let i = 0; i < totalFiles; i++) {
             const file = files[i];
@@ -418,9 +453,6 @@ async function startSplit() {
             const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
             if (isExcel) {
-                // ==========================================
-                // 1. MESIN PEMBACA EXCEL
-                // ==========================================
                 let rows = await readExcelFile(file);
                 if (rows && rows.length > 0) {
                     if (!header) {
@@ -445,23 +477,7 @@ async function startSplit() {
 
                     if (codingIndex !== -1) {
                         for (let row of rows) {
-                            if (!row || !Array.isArray(row) || row.join('').trim() === '') continue; // Abaikan baris hantu
-                            
-                            let codeVal = row[codingIndex];
-                            let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
-                            
-                            // Normalisasi Data Kosong
-                            if (['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
-
-                            let cat = 'OPEN';
-                            if (statusMapping[code]) {
-                                cat = statusMapping[code].trim().toUpperCase();
-                            }
-
-                            if (cat === 'CLOSED') closedData.push(row);
-                            else if (cat === 'CLAIM') claimData.push(row);
-                            else if (cat === 'RETURN') returnData.push(row);
-                            else openData.push(row);
+                            processRow(row);
                         }
                     }
                 }
@@ -471,13 +487,11 @@ async function startSplit() {
                 if (progPercent) progPercent.innerText = pct + '%';
 
             } else {
-                // ==========================================
-                // 2. MESIN PEMBACA CSV (PAPA PARSE)
-                // ==========================================
                 await new Promise((resolve) => {
                     let isFirstRow = true;
                     Papa.parse(file, {
                         chunkSize: 1024 * 1024 * 5,
+                        skipEmptyLines: true, 
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
@@ -501,23 +515,7 @@ async function startSplit() {
                             if (codingIndex === -1) return;
                             
                             for (let row of rows) {
-                                if (!row || !Array.isArray(row) || row.join('').trim() === '') continue; // Abaikan baris hantu
-                                
-                                let codeVal = row[codingIndex];
-                                let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
-                                
-                                // Normalisasi Data Kosong (DI SINI IF (!CODE) CONTINUE; SUDAH DIHAPUS)
-                                if (['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
-
-                                let cat = 'OPEN';
-                                if (statusMapping[code]) {
-                                    cat = statusMapping[code].trim().toUpperCase();
-                                }
-
-                                if (cat === 'CLOSED') closedData.push(row);
-                                else if (cat === 'CLAIM') claimData.push(row);
-                                else if (cat === 'RETURN') returnData.push(row);
-                                else openData.push(row);
+                                processRow(row);
                             }
                         },
                         complete: function() {

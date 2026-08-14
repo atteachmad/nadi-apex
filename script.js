@@ -435,9 +435,20 @@ async function startSplit() {
                     if (codingIndex !== -1) {
                         for (let row of rows) {
                             if (!row || !Array.isArray(row)) continue;
-                            let codeVal = row[codingIndex];
-                            let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                            if (!code) continue; 
+let codeVal = row[codingIndex];
+let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
+
+// Tentukan kategori: Jika code kosong/blank, paksa masuk ke 'OPEN'
+let cat = 'OPEN'; 
+if (code !== '') {
+    cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
+}
+
+// Masukkan baris ke file output yang sesuai
+if (cat === 'CLOSED') closedData.push(row);
+else if (cat === 'CLAIM') claimData.push(row);
+else if (cat === 'RETURN') returnData.push(row);
+else openData.push(row); // Data dengan CODING blank/kosong akan masuk otomatis ke sini 
                             let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                             if (cat === 'CLOSED') closedData.push(row);
                             else if (cat === 'CLAIM') claimData.push(row);
@@ -479,8 +490,19 @@ async function startSplit() {
                             for (let row of rows) {
                                 if (!row || !Array.isArray(row)) continue;
                                 let codeVal = row[codingIndex];
-                                let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                                if (!code) continue;
+let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
+
+// Tentukan kategori: Jika code kosong/blank, paksa masuk ke 'OPEN'
+let cat = 'OPEN'; 
+if (code !== '') {
+    cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
+}
+
+// Masukkan baris ke file output yang sesuai
+if (cat === 'CLOSED') closedData.push(row);
+else if (cat === 'CLAIM') claimData.push(row);
+else if (cat === 'RETURN') returnData.push(row);
+else openData.push(row); // Data dengan CODING blank/kosong akan masuk otomatis ke sini
                                 let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                                 if (cat === 'CLOSED') closedData.push(row);
                                 else if (cat === 'CLAIM') claimData.push(row);

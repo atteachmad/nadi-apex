@@ -8,7 +8,66 @@ tailwind.config = {
 // --- FUNGSI HELPER GLOBAL ---
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// --- 1. SIDEBAR TOGGLE & NAVIGATION LOGIC ---
+// ==========================================================
+// UX CENTER MODAL NOTIFICATION SYSTEM & AUTO REFRESH
+// ==========================================================
+function showToast(message, type = 'success', requireRefresh = false) {
+    const container = document.getElementById('toast-container');
+    const overlay = document.getElementById('toast-overlay');
+    if (!container || !overlay) return;
+    
+    // Tampilkan Backdrop Hitam
+    overlay.classList.remove('hidden');
+    setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+    
+    const toast = document.createElement('div');
+    let bgColor = type === 'success' ? 'bg-green-600' : (type === 'error' ? 'bg-red-600' : 'bg-blue-600');
+    let icon = type === 'success' ? 'fa-check-circle' : (type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle');
+    
+    toast.className = `flex flex-col items-center p-6 text-white rounded-2xl shadow-2xl transform transition-all duration-300 scale-90 opacity-0 pointer-events-auto border border-white/20 ${bgColor} w-full max-w-sm text-center gap-4`;
+    
+    toast.innerHTML = `
+        <i class="fas ${icon} text-5xl drop-shadow-md"></i>
+        <div class="text-sm md:text-base font-semibold w-full break-words leading-relaxed">${message}</div>
+        <button class="toast-close-btn mt-2 px-6 py-2.5 bg-black/20 hover:bg-black/40 rounded-lg text-white font-bold transition w-full focus:outline-none tracking-wider">
+            TUTUP
+        </button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Animasi Muncul ke Tengah
+    setTimeout(() => {
+        toast.classList.remove('scale-90', 'opacity-0');
+        toast.classList.add('scale-100', 'opacity-100');
+    }, 50);
+    
+    // Logika Klik Tutup
+    const closeBtn = toast.querySelector('.toast-close-btn');
+    closeBtn.onclick = () => {
+        toast.classList.remove('scale-100', 'opacity-100');
+        toast.classList.add('scale-90', 'opacity-0');
+        overlay.classList.add('opacity-0');
+        
+        setTimeout(() => {
+            toast.remove();
+            // Cegah hilangnya overlay jika ada 2 error bersamaan
+            if(container.children.length === 0) overlay.classList.add('hidden');
+            
+            // JIKA SUCCESS & MEMBUTUHKAN REFRESH, JALANKAN REFRESH SAAT DI TUTUP
+            if (requireRefresh) window.location.reload();
+        }, 300);
+    };
+
+    // Auto-Close hanya untuk info/error (Tanpa reload)
+    if (type !== 'success') {
+        setTimeout(() => {
+            if (toast.parentElement) closeBtn.click();
+        }, 6000);
+    }
+}
+
+// --- 1. SIDEBAR TOGGLE & STATE MANAGEMENT ---
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
@@ -26,9 +85,7 @@ function toggleSidebar() {
         }
     } else {
         sidebar.classList.toggle('desktop-collapsed');
-        if(tooltip) {
-            tooltip.innerText = sidebar.classList.contains('desktop-collapsed') ? "Buka Sidebar" : "Tutup Sidebar";
-        }
+        if(tooltip) tooltip.innerText = sidebar.classList.contains('desktop-collapsed') ? "Buka Sidebar" : "Tutup Sidebar";
     }
 }
 
@@ -54,15 +111,19 @@ function switchTab(tabId) {
     };
     document.getElementById('header-title').innerText = titles[tabId];
 
+    // Simpan Tab yang sedang dibuka sehingga Refresh Otomatis tidak akan mereset Tab UI
+    localStorage.setItem('nadi_active_tab', tabId);
+
     if (window.innerWidth < 768) {
         const sidebar = document.getElementById('sidebar');
         if (!sidebar.classList.contains('-translate-x-full')) toggleSidebar();
     }
 }
 
-// Membuka tab Parquet sebagai halaman awal
+// Saat browser memuat, ambil tab yang terakhir disimpan di memori
 document.addEventListener("DOMContentLoaded", () => {
-    switchTab('parquet');
+    const activeTab = localStorage.getItem('nadi_active_tab') || 'parquet';
+    switchTab(activeTab);
 });
 
 // --- 2. LOGIC DRAG & DROP & FILES ---
@@ -100,10 +161,6 @@ setupDropzone('dropzone-row', 'row-files', 'row-label');
 setupDropzone('dropzone-merge', 'merge-files', 'merge-label');
 setupDropzone('dropzone-gmaps', 'gmaps-files', 'gmaps-label'); 
 
-const MAX_MB = 500;
-const MAX_BYTES = MAX_MB * 1024 * 1024;
-const MAX_EXCEL_ROWS = 900000;
-
 function exportData(dataArr2D, format, filename) {
     if (format === 'csv') {
         const csv = Papa.unparse(dataArr2D);
@@ -124,7 +181,6 @@ function exportData(dataArr2D, format, filename) {
 async function loadDuckDBEngine() {
     if (window._duckdbInstance) return window._duckdbInstance;
     
-    // Impor librari DuckDB WASM dari JSDelivr secara asinkron
     const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/+esm');
     const bundles = duckdb.getJsDelivrBundles();
     const bundle = await duckdb.selectBundle(bundles);
@@ -157,8 +213,8 @@ async function startParquetProcess() {
     const inputFiles = document.getElementById('parquet-input-files').files;
     const masterFile = document.getElementById('parquet-master-file').files[0];
 
-    if (inputFiles.length === 0) return alert("Silakan unggah File Transaksi (Baru) terlebih dahulu!");
-    if (mode === 'inject' && !masterFile) return alert("Mode Suntik aktif: Silakan unggah File Master .parquet lama Anda!");
+    if (inputFiles.length === 0) return showToast("Silakan unggah File Transaksi (Baru) terlebih dahulu!", "error");
+    if (mode === 'inject' && !masterFile) return showToast("Mode Suntik aktif: Silakan unggah File Master .parquet lama Anda!", "error");
 
     const btn = document.getElementById('btn-run-parquet');
     const progCont = document.getElementById('parquet-progress-container');
@@ -192,7 +248,8 @@ async function startParquetProcess() {
                 const csvStr = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+                        // FORCE RAW: FALSE agar tanggal tidak hancur saat format conversion
+                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: false, raw: false});
                         resolve(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
                     };
                     reader.readAsArrayBuffer(file);
@@ -210,9 +267,7 @@ async function startParquetProcess() {
                 let validCols = [];
                 if (colMode === 'keep') {
                     validCols = customCols.filter(c => actualCols.includes(c));
-                    if(validCols.length === 0) {
-                        throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\n\nKolom asli yang tersedia: ${actualCols.join(', ')}`);
-                    }
+                    if(validCols.length === 0) throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\nKolom asli yang tersedia: ${actualCols.join(', ')}`);
                 } else if (colMode === 'drop') {
                     validCols = actualCols.filter(c => !customCols.includes(c));
                 }
@@ -246,11 +301,12 @@ async function startParquetProcess() {
         await conn.close();
 
         progBar.style.width = '100%';
-        progStatus.innerText = "Selesai! File Parquet siap ditarik ke Power BI.";
-        setTimeout(() => alert(`SUKSES!\nFile Parquet asli berhasil diunduh.\nSekarang Anda bisa melakukan Get Data -> Parquet di Power BI secara instan tanpa lag!`), 300);
+        progStatus.innerText = "Selesai! File Parquet siap ditarik.";
+        // Memberikan true parameter untuk Reload pada Klik 'Tutup'
+        showToast(`SUKSES! File Parquet berhasil diunduh. Silahkan klik Tutup untuk menyegarkan sistem.`, 'success', true);
 
     } catch (e) {
-        alert("TERJADI KESALAHAN SISTEM:\n\n" + e.message);
+        showToast("KESALAHAN SISTEM: " + e.message, "error");
         progStatus.innerText = "Proses Dibatalkan.";
     } finally {
         btn.disabled = false; btn.classList.remove('opacity-50');
@@ -266,7 +322,7 @@ const statusMapping = {
 };
 
 // ==========================================================
-// 0. HELPER UNTUK BACA FILE EXCEL (.XLSX / .XLS) - VERSI REVISI SCAN SEMUA SHEET
+// KUNCI: raw & cellDates false menjamin tipe data Tanggal tidak korup!
 // ==========================================================
 function readExcelFile(file) {
     return new Promise((resolve, reject) => {
@@ -274,34 +330,27 @@ function readExcelFile(file) {
         reader.onload = (e) => {
             try {
                 const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array', cellDates: true, raw: false });
+                // raw: false, cellDates: false wajib untuk integrasi Format Tanggal sempurna (CSV <-> XLSX)
+                const workbook = XLSX.read(data, { type: 'array', cellDates: false, raw: false });
                 if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
                     return resolve([]);
                 }
                 
                 let bestRows = [];
-                // Cerdas: Scan semua sheet (Bukan cuma sheet pertama), untuk menangkal sheet kosong/hidden dari APEX
                 for (let sheetName of workbook.SheetNames) {
                     const worksheet = workbook.Sheets[sheetName];
-                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
                     
                     let hasCoding = false;
                     for(let i = 0; i < Math.min(rows.length, 200); i++) {
                         let row = rows[i];
                         if(!row || !Array.isArray(row)) continue;
-                        
-                        // Deteksi ekstrem: Bersihkan segala spasi atau metadata aneh
                         if(row.some(col => String(col || '').toUpperCase().replace(/[^A-Z0-9]/g, '').includes('CODING'))) {
                             hasCoding = true;
                             break;
                         }
                     }
-                    
-                    if (hasCoding) {
-                        return resolve(rows); // Langsung kembalikan sheet valid yang ditemukan
-                    }
-                    
-                    // Fallback jika tidak menemukan CODING sama sekali
+                    if (hasCoding) return resolve(rows);
                     if (rows.length > bestRows.length) bestRows = rows; 
                 }
                 resolve(bestRows);
@@ -321,14 +370,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mergeInput) mergeInput.setAttribute('accept', '.csv, .xlsx, .xls');
 });
 
-// ==========================================================
-// 1. DATA SPLITTER LOGIC (MEMPROSES CSV & XLSX/XLS)
-// ==========================================================
 async function startSplit() {
     const files = document.getElementById('split-files').files;
     const format = document.getElementById('split-format').value;
     
-    if (files.length === 0) return alert("Pilih minimal satu file (CSV / XLSX / XLS)!");
+    if (files.length === 0) return showToast("Pilih minimal satu file (CSV / XLSX / XLS)!", "error");
 
     const btn = document.getElementById('btn-run-split');
     const progCont = document.getElementById('split-progress-container');
@@ -336,8 +382,7 @@ async function startSplit() {
     const progPercent = document.getElementById('split-percent');
     const progStatus = document.getElementById('split-status');
 
-    btn.disabled = true;
-    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
     if (progCont) progCont.classList.remove('hidden');
     if (progBar) progBar.style.width = '0%';
     if (progPercent) progPercent.innerText = '0%';
@@ -346,20 +391,15 @@ async function startSplit() {
     let closedData = [], openData = [], claimData = [], returnData = [];
     let header = null;
     let codingIndex = -1;
-
     let totalFiles = files.length;
     let processedFiles = 0;
 
-    // FUNGSI HELPER: Mencari posisi kolom secara super ketat tanpa memperdulikan jebakan karakter Excel
     const findHeaderIndex = (row) => {
         if (!row || !Array.isArray(row)) return -1;
-        // 1. Prioritaskan kecocokan persis (Exact Match) bebas karakter siluman
         let exact = row.findIndex(col => String(col || '').replace(/[^A-Z0-9]/ig, '').toUpperCase() === 'CODING');
         if (exact !== -1) return exact;
-        // 2. Jika tetap tidak ada, ambil sel yang "mengandung" kata CODING
         return row.findIndex(col => String(col || '').toUpperCase().includes('CODING'));
     };
-
     const SEARCH_LIMIT = 200; 
 
     try {
@@ -378,10 +418,7 @@ async function startSplit() {
                             if (foundIdx !== -1) {
                                 header = rows[r];
                                 codingIndex = foundIdx;
-                                closedData.push(header);
-                                openData.push(header);
-                                claimData.push(header);
-                                returnData.push(header);
+                                closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
                                 rows = rows.slice(r + 1);
                                 break;
                             }
@@ -390,22 +427,17 @@ async function startSplit() {
                         for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                             let foundIdx = findHeaderIndex(rows[r]);
                             if (foundIdx !== -1) {
-                                rows = rows.slice(r + 1);
-                                break;
+                                rows = rows.slice(r + 1); break;
                             }
                         }
                     }
 
                     if (codingIndex !== -1) {
                         for (let row of rows) {
-                            // Revisi: Tidak lagi mengecek batas array yang terpotong untuk Excel
                             if (!row || !Array.isArray(row)) continue;
-                            
                             let codeVal = row[codingIndex];
                             let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                            
                             if (!code) continue; 
-
                             let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                             if (cat === 'CLOSED') closedData.push(row);
                             else if (cat === 'CLAIM') claimData.push(row);
@@ -414,14 +446,12 @@ async function startSplit() {
                         }
                     }
                 }
-
                 processedFiles++;
                 let pct = Math.round((processedFiles / totalFiles) * 100);
                 if (progBar) progBar.style.width = pct + '%';
                 if (progPercent) progPercent.innerText = pct + '%';
 
             } else {
-                // LOGIKA PROSES FILE CSV
                 await new Promise((resolve) => {
                     let isFirstRow = true;
                     Papa.parse(file, {
@@ -429,41 +459,28 @@ async function startSplit() {
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
-
                             if (!header) {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) {
-                                        header = rows[r];
-                                        codingIndex = foundIdx;
-                                        closedData.push(header);
-                                        openData.push(header);
-                                        claimData.push(header);
-                                        returnData.push(header);
-                                        rows = rows.slice(r + 1);
-                                        break;
+                                        header = rows[r]; codingIndex = foundIdx;
+                                        closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
+                                        rows = rows.slice(r + 1); break;
                                     }
                                 }
                             } else if (isFirstRow) {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
-                                    if (foundIdx !== -1) {
-                                        rows = rows.slice(r + 1);
-                                        break;
-                                    }
+                                    if (foundIdx !== -1) { rows = rows.slice(r + 1); break; }
                                 }
                             }
                             isFirstRow = false;
-
                             if (codingIndex === -1) return;
-
                             for (let row of rows) {
                                 if (!row || !Array.isArray(row)) continue;
                                 let codeVal = row[codingIndex];
                                 let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                                
                                 if (!code) continue;
-
                                 let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
                                 if (cat === 'CLOSED') closedData.push(row);
                                 else if (cat === 'CLAIM') claimData.push(row);
@@ -493,38 +510,29 @@ async function startSplit() {
         if (returnData.length > 1) { exportData(returnData, format, 'DATA_RETURN'); exported = true; }
 
         if (!exported) {
-            alert("Tidak ada data yang berhasil dipisahkan. Pastikan file memiliki kolom CODING.");
+            showToast("Tidak ada data yang berhasil dipisahkan. Pastikan file memiliki kolom CODING.", "error");
             if (progStatus) progStatus.innerText = 'Gagal memisahkan data.';
         } else {
             if (progStatus) progStatus.innerText = 'Pemisahan selesai!';
+            showToast('Pemisahan Selesai! Klik tutup untuk segarkan aplikasi.', 'success', true);
         }
     } catch (error) {
-        alert("Terjadi kesalahan: " + error.message);
+        showToast("Terjadi kesalahan: " + error.message, "error");
         if (progStatus) progStatus.innerText = 'Error saat pemrosesan.';
     } finally {
-        btn.disabled = false;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        btn.disabled = false; btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 }
 
-
-// ==========================================================
-// 2. DATA MERGER LOGIC (MEMPROSES CSV & XLSX/XLS)
-// ==========================================================
+// --- 2. DATA MERGER LOGIC ---
 async function startMerge() {
-const files = document.getElementById('merge-files').files;
+    const files = document.getElementById('merge-files').files;
     const format = document.getElementById('merge-format').value;
-    
-    // SESUAIKAN DARI SINI: Menangkap nilai input nama file dengan aman
     const customNameInput = document.getElementById('merge-filename');
-    const outputFilename = (customNameInput && customNameInput.value.trim() !== '') 
-        ? customNameInput.value.trim() 
-        : `DATA_MERGED_${new Date().getTime()}`;
-    // SAMPAI SINI
+    const outputFilename = (customNameInput && customNameInput.value.trim() !== '') ? customNameInput.value.trim() : `DATA_MERGED_${new Date().getTime()}`;
+    const dupColName = document.getElementById('merge-duplicate-col') ? document.getElementById('merge-duplicate-col').value.trim() : '';
 
-    const dupColName = document.getElementById('merge-dup-col') ? document.getElementById('merge-dup-col').value.trim() : '';
-
-    if (files.length === 0) return alert("Pilih minimal satu file (CSV / XLSX / XLS)!");
+    if (files.length === 0) return showToast("Pilih minimal satu file (CSV / XLSX / XLS)!", "error");
 
     const btn = document.getElementById('btn-run-merge');
     const progCont = document.getElementById('merge-progress-container');
@@ -532,8 +540,7 @@ const files = document.getElementById('merge-files').files;
     const progPercent = document.getElementById('merge-percent');
     const progStatus = document.getElementById('merge-status');
 
-    btn.disabled = true;
-    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
     if (progCont) progCont.classList.remove('hidden');
     if (progBar) progBar.style.width = '0%';
     if (progPercent) progPercent.innerText = '0%';
@@ -543,7 +550,6 @@ const files = document.getElementById('merge-files').files;
     let header = null;
     let dupColIndex = -1;
     let seenValues = new Set();
-
     let totalFiles = files.length;
     let processedFiles = 0;
 
@@ -551,7 +557,6 @@ const files = document.getElementById('merge-files').files;
         for (let i = 0; i < totalFiles; i++) {
             const file = files[i];
             if (progStatus) progStatus.innerText = `Membaca ${file.name}...`;
-
             const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
             if (isExcel) {
@@ -561,17 +566,12 @@ const files = document.getElementById('merge-files').files;
                         header = rows[0];
                         mergedData.push(header);
                         rows = rows.slice(1);
-
-                        if (dupColName) {
-                            dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
-                        }
+                        if (dupColName) dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
                     } else {
                         rows = rows.slice(1);
                     }
-
                     for (let row of rows) {
                         if (!row || row.length === 0) continue;
-
                         if (dupColIndex !== -1 && row[dupColIndex] !== undefined) {
                             let val = String(row[dupColIndex]).trim();
                             if (val) {
@@ -582,12 +582,10 @@ const files = document.getElementById('merge-files').files;
                         mergedData.push(row);
                     }
                 }
-
                 processedFiles++;
                 let pct = Math.round((processedFiles / totalFiles) * 100);
                 if (progBar) progBar.style.width = pct + '%';
                 if (progPercent) progPercent.innerText = pct + '%';
-
             } else {
                 await new Promise((resolve) => {
                     let isFirstChunk = true;
@@ -596,23 +594,17 @@ const files = document.getElementById('merge-files').files;
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
-
                             if (!header) {
                                 header = rows[0];
                                 mergedData.push(header);
                                 rows = rows.slice(1);
-
-                                if (dupColName) {
-                                    dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
-                                }
+                                if (dupColName) dupColIndex = header.findIndex(col => String(col || '').trim().toUpperCase() === dupColName.toUpperCase());
                             } else if (isFirstChunk) {
                                 rows = rows.slice(1);
                             }
                             isFirstChunk = false;
-
                             for (let row of rows) {
                                 if (!row || row.length === 0) continue;
-
                                 if (dupColIndex !== -1 && row[dupColIndex] !== undefined) {
                                     let val = String(row[dupColIndex]).trim();
                                     if (val) {
@@ -638,30 +630,30 @@ const files = document.getElementById('merge-files').files;
         if (progStatus) progStatus.innerText = 'Mengekspor data gabungan...';
         await delay(300);
 
-if (mergedData.length > 1) {
-            exportData(mergedData, format, outputFilename); // Menggunakan variabel nama custom
+        if (mergedData.length > 1) {
+            exportData(mergedData, format, outputFilename); 
             if (progStatus) progStatus.innerText = 'Penggabungan selesai!';
+            showToast('Penggabungan File Selesai! Klik tutup untuk segarkan aplikasi.', 'success', true);
         } else {
-            alert("Tidak ada data yang berhasil digabungkan.");
+            showToast("Tidak ada data yang berhasil digabungkan.", "error");
             if (progStatus) progStatus.innerText = 'Gagal menggabungkan data.';
         }
     } catch (error) {
-        alert("Terjadi kesalahan: " + error.message);
+        showToast("Terjadi kesalahan: " + error.message, "error");
         if (progStatus) progStatus.innerText = 'Error saat pemrosesan.';
     } finally {
-        btn.disabled = false;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        btn.disabled = false; btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 }
 
 // --- 4. SPLIT BY ROWS LOGIC ---
 async function startRowSplit() {
     const files = document.getElementById('row-files').files;
-    if (files.length === 0) return alert('Silakan pilih/tarik file terlebih dahulu!');
+    if (files.length === 0) return showToast('Silakan pilih/tarik file terlebih dahulu!', 'error');
     const rowLimit = parseInt(document.getElementById('row-limit').value);
     const outFormat = document.getElementById('row-format').value;
     
-    if(isNaN(rowLimit) || rowLimit < 1) return alert('Batas baris tidak valid!');
+    if(isNaN(rowLimit) || rowLimit < 1) return showToast('Batas baris tidak valid!', 'error');
 
     const btn = document.getElementById('btn-run-row');
     const progCont = document.getElementById('row-progress-container');
@@ -671,79 +663,75 @@ async function startRowSplit() {
     btn.disabled = true; btn.classList.add('opacity-50');
     progCont.classList.remove('hidden');
 
-    for(let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
-        progStatus.innerText = `Memotong: ${file.name} (${i+1}/${files.length})`;
-        
-        await new Promise(async (resolve) => {
-            if(file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const sheetName = workbook.SheetNames[0];
-                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1});
-                    
-                    if(json.length <= 1) return resolve();
-                    const header = json[0];
-                    let part = 1;
-                    let chunkData = [header];
-                    
-                    for(let j = 1; j < json.length; j++) {
-                        chunkData.push(json[j]);
-                        if(chunkData.length - 1 >= rowLimit) {
-                            exportData(chunkData, outFormat, `${baseName}_Part${part}`);
-                            chunkData = [header];
-                            part++;
-                        }
-                    }
-                    if(chunkData.length > 1) {
-                        exportData(chunkData, outFormat, `${baseName}_Part${part}`);
-                    }
-                    resolve();
-                };
-                reader.readAsArrayBuffer(file);
-            } 
-            else {
-                let headerRow = null;
-                let part = 1;
-                let chunkData = [];
-                
-                Papa.parse(file, {
-                    header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
-                    chunk: function(results) {
-                        let rows = results.data;
-                        if(!headerRow && rows.length > 0) {
-                            headerRow = rows.shift();
-                            chunkData.push(headerRow);
-                        }
-                        for(let j = 0; j < rows.length; j++) {
-                            chunkData.push(rows[j]);
+    try {
+        for(let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+            progStatus.innerText = `Memotong: ${file.name} (${i+1}/${files.length})`;
+            
+            await new Promise(async (resolve) => {
+                if(file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const data = new Uint8Array(e.target.result);
+                        // Perlindungan Tipe Data Raw untuk Tanggal & Number
+                        const workbook = XLSX.read(data, {type: 'array', cellDates: false, raw: false});
+                        const sheetName = workbook.SheetNames[0];
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1, defval: '', raw: false});
+                        
+                        if(json.length <= 1) return resolve();
+                        const header = json[0];
+                        let part = 1;
+                        let chunkData = [header];
+                        
+                        for(let j = 1; j < json.length; j++) {
+                            chunkData.push(json[j]);
                             if(chunkData.length - 1 >= rowLimit) {
                                 exportData(chunkData, outFormat, `${baseName}_Part${part}`);
-                                chunkData = [headerRow];
-                                part++;
+                                chunkData = [header]; part++;
                             }
                         }
-                    },
-                    complete: function() {
-                        if(chunkData.length > 1) {
-                            exportData(chunkData, outFormat, `${baseName}_Part${part}`);
-                        }
+                        if(chunkData.length > 1) exportData(chunkData, outFormat, `${baseName}_Part${part}`);
                         resolve();
-                    }
-                });
-            }
-        });
-        
-        let pct = Math.round(((i + 1) / files.length) * 100);
-        progBar.style.width = `${pct}%`;
-        document.getElementById('row-percent').innerText = `${pct}%`;
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    let headerRow = null;
+                    let part = 1;
+                    let chunkData = [];
+                    Papa.parse(file, {
+                        header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
+                        chunk: function(results) {
+                            let rows = results.data;
+                            if(!headerRow && rows.length > 0) {
+                                headerRow = rows.shift(); chunkData.push(headerRow);
+                            }
+                            for(let j = 0; j < rows.length; j++) {
+                                chunkData.push(rows[j]);
+                                if(chunkData.length - 1 >= rowLimit) {
+                                    exportData(chunkData, outFormat, `${baseName}_Part${part}`);
+                                    chunkData = [headerRow]; part++;
+                                }
+                            }
+                        },
+                        complete: function() {
+                            if(chunkData.length > 1) exportData(chunkData, outFormat, `${baseName}_Part${part}`);
+                            resolve();
+                        }
+                    });
+                }
+            });
+            let pct = Math.round(((i + 1) / files.length) * 100);
+            progBar.style.width = `${pct}%`;
+            document.getElementById('row-percent').innerText = `${pct}%`;
+        }
+        progStatus.innerText = "Pemotongan Selesai!";
+        showToast('Proses Split Rows Sukses! Klik tutup untuk segarkan aplikasi.', 'success', true);
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false; btn.classList.remove('opacity-50');
     }
-
-    progStatus.innerText = "Pemotongan Selesai!";
-    btn.disabled = false; btn.classList.remove('opacity-50');
 }
 
 // --- 6. AUDIO & TEXT LOGIC ---
@@ -775,7 +763,6 @@ if(btnClearSTT) {
 
 let recognition;
 let isRecording = false;
-
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
@@ -793,9 +780,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onresult = (event) => {
         let finalTranscript = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript + ' ';
-            }
+            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
         }
         if (finalTranscript && sttTextarea) {
             sttTextarea.value += finalTranscript;
@@ -803,20 +788,14 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             sttTextarea.scrollTop = sttTextarea.scrollHeight;
         }
     };
-
     recognition.onerror = (event) => {
         if(event.error === 'not-allowed') {
-            alert('Izin penggunaan mikrofon ditolak oleh browser.');
+            showToast('Izin penggunaan mikrofon ditolak oleh browser.', 'error');
             stopRecordingUI();
         }
     };
-
     recognition.onend = () => {
-        if (isRecording) {
-            try { recognition.start(); } catch(e) {}
-        } else {
-            stopRecordingUI();
-        }
+        if (isRecording) { try { recognition.start(); } catch(e) {} } else { stopRecordingUI(); }
     };
 } else {
     if(sttBtnToggle) {
@@ -835,12 +814,9 @@ function stopRecordingUI() {
 
 if(sttBtnToggle) {
     sttBtnToggle.addEventListener('click', () => {
-        if(!recognition) return alert('Fitur ini tidak didukung di browser Anda. Gunakan Google Chrome versi terbaru.');
-        
+        if(!recognition) return showToast('Fitur ini tidak didukung di browser Anda.', 'error');
         if(isRecording) {
-            isRecording = false;
-            recognition.stop();
-            stopRecordingUI();
+            isRecording = false; recognition.stop(); stopRecordingUI();
         } else {
             try { recognition.start(); } catch(e) {}
         }
@@ -850,7 +826,7 @@ if(sttBtnToggle) {
 function saveAudioText(type) {
     if(!sttTextarea) return;
     const text = sttTextarea.value.trim();
-    if(!text) return alert('Tidak ada teks untuk disimpan.');
+    if(!text) return showToast('Tidak ada teks untuk disimpan.', 'error');
 
     let blob, filename;
     if(type === 'txt') {
@@ -861,16 +837,11 @@ function saveAudioText(type) {
         blob = new Blob([htmlFormat], { type: 'application/msword;charset=utf-8' });
         filename = 'Nadi_AudioToText.doc';
     }
-
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    showToast('Teks berhasil disimpan!', 'success');
 }
 
-// 6C. Text to Audio
 const ttsInput = document.getElementById('tts-input');
 const btnTtsPlay = document.getElementById('btn-tts-play');
 const btnTtsStop = document.getElementById('btn-tts-stop');
@@ -880,56 +851,94 @@ if(btnTtsPlay) {
     btnTtsPlay.addEventListener('click', () => {
         if ('speechSynthesis' in window) {
             window.speechSynthesis.cancel();
-            
             const text = ttsInput.value.trim();
-            if(!text) return alert('Ketikkan teks terlebih dahulu!');
-
+            if(!text) return showToast('Ketikkan teks terlebih dahulu!', 'error');
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = ttsLang.value;
-            utterance.rate = 0.95; 
-            utterance.pitch = 1;
-
+            utterance.lang = ttsLang.value; utterance.rate = 0.95; utterance.pitch = 1;
             window.speechSynthesis.speak(utterance);
         } else {
-            alert("Browser Anda tidak mendukung fitur Text to Audio.");
+            showToast("Browser Anda tidak mendukung fitur Text to Audio.", "error");
         }
     });
 }
 
 if(btnTtsStop) {
     btnTtsStop.addEventListener('click', () => {
-        if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-        }
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     });
 }
 
-// --- 7. GOOGLE MAPS SCRAPER LOGIC ---
+// --- 7. GOOGLE MAPS SCRAPER LOGIC & FALLBACK ENGINE ---
 function downloadCustomGmapsTemplate() {
     try {
         const templateData = [
-            ["DATA_INPUT_UTAMA"],
-            ["JNE Express Tomang Raya Jakarta"],
-            ["-6.175392, 106.827153"],
-            ["Jl. Soekarno-Hatta No.829 Mekar Mulya Bandung"]
+            ["DATA_INPUT_UTAMA"], ["JNE Express Tomang Raya Jakarta"], ["-6.175392, 106.827153"], ["Jl. Soekarno-Hatta No.829 Mekar Mulya Bandung"]
         ];
-        
         const ws = XLSX.utils.aoa_to_sheet(templateData);
         ws['!cols'] = [{ wch: 45 }]; 
-        
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Input_Data");
         XLSX.writeFile(wb, "Nadi_Template_Maps_Scraper.xlsx");
+        showToast("Template berhasil diunduh", "success");
     } catch (err) {
-        alert("Terjadi kesalahan sistem saat membuat template. Pastikan memori browser Anda tidak penuh.");
+        showToast("Terjadi kesalahan sistem saat membuat template.", "error");
     }
+}
+
+// ENGINE API FETCH
+async function fetchGeocode(query) {
+    try {
+        let arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(query)}&maxLocations=1`;
+        const resArc = await fetch(arcgisUrl);
+        const arcJson = await resArc.json();
+        
+        if (arcJson && arcJson.candidates && arcJson.candidates.length > 0 && arcJson.candidates[0].score >= 70) {
+            let candidate = arcJson.candidates[0];
+            return { address: candidate.address, latlon: `${candidate.location.y}, ${candidate.location.x}`, name: candidate.address.split(',')[0], source: 'ArcGIS' };
+        }
+
+        let fetchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=id`;
+        const res = await fetch(fetchUrl);
+        const geoJson = await res.json();
+        if (geoJson && geoJson.length > 0) {
+            return { address: geoJson[0].display_name, latlon: `${geoJson[0].lat}, ${geoJson[0].lon}`, name: geoJson[0].display_name.split(',')[0], source: 'OSM' };
+        }
+    } catch(e) {
+        console.warn("Fetch Error Geocode:", e);
+    }
+    return null;
+}
+
+// FALLBACK REGEX & ITERATIVE TRUNCATION ENGINE
+async function progressiveGeocode(originalQuery) {
+    let result = await fetchGeocode(originalQuery);
+    if (result) return result; 
+
+    const kwRegex = /(jalan|jl\.?|perumahan|perum|desa|kampung|kp\.?|kelurahan|kel\.?|kecamatan|kec\.?)\s+[a-zA-Z0-9]+/ig;
+    let keywordsMatch = originalQuery.match(kwRegex);
+    
+    if (keywordsMatch && keywordsMatch.length > 0) {
+        let fallbackQuery = keywordsMatch.join(', ');
+        await delay(600); 
+        result = await fetchGeocode(fallbackQuery);
+        if (result) return result; 
+    }
+    
+    let parts = originalQuery.split(/[,\s]+/).filter(p => p.length > 2);
+    while(parts.length > 2) {
+        parts.shift(); 
+        let fallbackQuery = parts.join(' ');
+        await delay(600);
+        result = await fetchGeocode(fallbackQuery);
+        if(result) return result;
+    }
+    
+    return null; 
 }
 
 async function startCustomMapsScraper() {
     const fileInput = document.getElementById('gmaps-files');
-    if (!fileInput || fileInput.files.length === 0) {
-        return alert('Silakan unggah file Excel/CSV terlebih dahulu!');
-    }
+    if (!fileInput || fileInput.files.length === 0) return showToast('Silakan unggah file Excel/CSV terlebih dahulu!', 'error');
 
     const options = {
         name: document.getElementById('opt-name').checked,
@@ -945,14 +954,14 @@ async function startCustomMapsScraper() {
     const progStatus = document.getElementById('gmaps-status');
     const logBox = document.getElementById('gmaps-log');
 
-    btn.disabled = true;
-    btn.classList.add('opacity-50');
+    btn.disabled = true; btn.classList.add('opacity-50');
     progCont.classList.remove('hidden');
     progBar.style.width = '0%';
     
     const printLog = (text, type = "INFO") => {
-        let color = type === "ERROR" ? "text-red-400" : (type === "WARN" ? "text-yellow-400" : (type === "SYSTEM" ? "text-blue-400" : "text-green-400"));
-        logBox.innerHTML += `<span class="${color}">[${type}] ${text}</span><br>`;
+        let color = type === "ERROR" ? "text-red-500" : (type === "WARN" ? "text-yellow-400" : (type === "SYSTEM" ? "text-blue-400" : (type === "SUCCESS" ? "text-green-500" : "text-gray-300")));
+        let time = new Date().toLocaleTimeString('id-ID', {hour12:false});
+        logBox.innerHTML += `<div><span class="text-gray-500">[${time}]</span> <span class="${color} font-bold">[${type}]</span> ${text}</div>`;
         logBox.scrollTop = logBox.scrollHeight;
     };
 
@@ -965,30 +974,25 @@ async function startCustomMapsScraper() {
             reader.onload = (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const firstSheet = workbook.SheetNames[0];
-                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {header: 1});
+                    // Perlindungan Tipe Data Raw
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: false, raw: false});
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1, defval: '', raw: false});
                     resolve(json);
-                } catch (err) {
-                    reject(err);
-                }
+                } catch (err) { reject(err); }
             };
             reader.readAsArrayBuffer(file);
         });
 
         if(dataArr.length <= 1) throw new Error("Data kosong atau hanya berisi header.");
-
         const totalRows = dataArr.length - 1;
-        printLog(`Ditemukan ${totalRows} baris data. Memulai ekstraksi...`);
+        printLog(`Ditemukan ${totalRows} baris data. Memulai ekstraksi...`, "INFO");
 
         let finalData = [];
         let headerRow = ["DATA_INPUT_UTAMA"];
         if(options.name) headerRow.push("NAMA_TEMPAT");
         if(options.latlong) headerRow.push("LATITUDE_LONGITUDE");
         if(options.address) headerRow.push("ALAMAT_LENGKAP");
-        
         headerRow.push("RATING", "JUMLAH_ULASAN", "NO_TELEPON"); 
-        
         if(options.url) headerRow.push("URL_MAPS");
         finalData.push(headerRow);
 
@@ -1000,47 +1004,24 @@ async function startCustomMapsScraper() {
 
             let inputQuery = String(row[0]).trim();
             let newRow = [inputQuery];
-
             let geoData = { name: "Tidak Ditemukan", latlon: "Tidak Ditemukan", address: "Tidak Ditemukan" };
 
             if (needGeocoding && inputQuery !== "") {
-                try {
-                    let fetchUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(inputQuery)}&format=json&limit=1`;
-                    const res = await fetch(fetchUrl);
-                    const geoJson = await res.json();
-
-                    if (geoJson && geoJson.length > 0) {
-                        geoData.address = geoJson[0].display_name;
-                        geoData.latlon = `${geoJson[0].lat}, ${geoJson[0].lon}`;
-                        geoData.name = geoJson[0].display_name.split(',')[0];
-                    } else {
-                        let arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(inputQuery)}&maxLocations=1`;
-                        const resArc = await fetch(arcgisUrl);
-                        const arcJson = await resArc.json();
-
-                        if (arcJson && arcJson.candidates && arcJson.candidates.length > 0) {
-                            let candidate = arcJson.candidates[0];
-                            geoData.address = candidate.address;
-                            geoData.latlon = `${candidate.location.y}, ${candidate.location.x}`;
-                            geoData.name = candidate.address.split(',')[0];
-                        }
-                    }
-                } catch(e) {}
-                await delay(1200);
-            } else if (!needGeocoding && i % 1000 === 0) {
-                await delay(10); 
+                let geoResult = await progressiveGeocode(inputQuery);
+                if (geoResult) {
+                    geoData = geoResult;
+                    printLog(`Sukses ekspor via ${geoResult.source}: ${inputQuery.substring(0,25)}...`, "SUCCESS");
+                } else {
+                    printLog(`Seluruh Fallback gagal (Not Found): ${inputQuery.substring(0,25)}...`, "WARN");
+                }
+                await delay(1200); 
             }
 
             if(options.name) newRow.push(geoData.name);
             if(options.latlong) newRow.push(geoData.latlon);
             if(options.address) newRow.push(geoData.address);
-
             newRow.push("N/A", "N/A", "N/A");
-
-            if(options.url) {
-                let mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(inputQuery)}`;
-                newRow.push(mapsUrl);
-            }
+            if(options.url) newRow.push(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(inputQuery)}`);
 
             finalData.push(newRow);
 
@@ -1052,13 +1033,15 @@ async function startCustomMapsScraper() {
         
         exportData(finalData, 'xlsx', `Nadi_Maps_Scraper_${new Date().getTime()}`);
         progStatus.innerText = "Selesai! File berhasil diunduh.";
-        printLog("Proses selesai tanpa bantuan server!", "SUCCESS");
+        printLog("Proses selesai tanpa bantuan backend server!", "SYSTEM");
+        
+        showToast("Ekstraksi Maps Selesai! Klik tutup untuk segarkan aplikasi.", "success", true);
 
     } catch (error) {
         printLog(error.message, "ERROR");
         progStatus.innerText = "Terjadi kesalahan.";
+        showToast("Error Maps Scraper: " + error.message, "error");
     } finally {
-        btn.disabled = false;
-        btn.classList.remove('opacity-50');
+        btn.disabled = false; btn.classList.remove('opacity-50');
     }
 }

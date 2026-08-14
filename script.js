@@ -402,6 +402,36 @@ async function startSplit() {
     };
     const SEARCH_LIMIT = 200; 
 
+    // ==========================================================
+    // HELPER: Standarisasi Data Cleansing & Normalization 
+    // ==========================================================
+    const processRow = (row) => {
+        if (!row || !Array.isArray(row)) return;
+        
+        // Lewati jika seluruh isi baris benar-benar kosong melompong (sisa enter)
+        if (row.join('').trim() === '') return;
+
+        let codeVal = row[codingIndex];
+        let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
+
+        // Parameter Logika: Jika kosong atau bernilai error, ubah jadi BLANK
+        if (['', 'NAN', 'NULL', '<NA>'].includes(code)) {
+            code = 'BLANK';
+        }
+
+        // Penentuan kategori berdasarkan statusMapping
+        let cat = 'OPEN';
+        if (code !== 'BLANK') {
+            cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
+        }
+
+        // Distribusikan ke file yang tepat
+        if (cat === 'CLOSED') closedData.push(row);
+        else if (cat === 'CLAIM') claimData.push(row);
+        else if (cat === 'RETURN') returnData.push(row);
+        else openData.push(row); // Data BLANK akan otomatis masuk ke sini
+    };
+
     try {
         for (let i = 0; i < totalFiles; i++) {
             const file = files[i];
@@ -433,16 +463,9 @@ async function startSplit() {
                     }
 
                     if (codingIndex !== -1) {
+                        // Jalankan Normalization Pipeline pada data Excel
                         for (let row of rows) {
-                            if (!row || !Array.isArray(row)) continue;
-                            let codeVal = row[codingIndex];
-                            let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                            if (!code) continue; 
-                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-                            if (cat === 'CLOSED') closedData.push(row);
-                            else if (cat === 'CLAIM') claimData.push(row);
-                            else if (cat === 'RETURN') returnData.push(row);
-                            else openData.push(row);
+                            processRow(row);
                         }
                     }
                 }
@@ -456,6 +479,7 @@ async function startSplit() {
                     let isFirstRow = true;
                     Papa.parse(file, {
                         chunkSize: 1024 * 1024 * 5,
+                        skipEmptyLines: true, // Membantu membersihkan enter kosong di akhir file CSV
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
@@ -475,17 +499,12 @@ async function startSplit() {
                                 }
                             }
                             isFirstRow = false;
+                            
                             if (codingIndex === -1) return;
+                            
+                            // Jalankan Normalization Pipeline pada data CSV
                             for (let row of rows) {
-                                if (!row || !Array.isArray(row)) continue;
-                                let codeVal = row[codingIndex];
-                                let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                                if (!code) continue;
-                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-                                if (cat === 'CLOSED') closedData.push(row);
-                                else if (cat === 'CLAIM') claimData.push(row);
-                                else if (cat === 'RETURN') returnData.push(row);
-                                else openData.push(row);
+                                processRow(row);
                             }
                         },
                         complete: function() {

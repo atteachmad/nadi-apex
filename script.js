@@ -418,12 +418,17 @@ async function startSplit() {
                         isFirstRow = false;
                     }
 
-                    rows.forEach(row => {
+                    if (codingIndex !== -1) {
+                        rows.forEach(row => {
+                        // 1. Ambil nilai coding dari kolom index
                         let code = row[codingIndex];
+                        
+                        // 2. Terapkan logika Versi 1 yang bersih dan aman
                         if(!code) code = 'BLANK';
                         code = String(code).trim().toUpperCase();
                         if(['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
 
+                        // 3. Cocokkan dengan statusMapping untuk dikirim ke file tujuan ('Open', 'Closed', dll)
                         const status = statusMapping[code];
                         if(status && memory[status]) {
                             memory[status].data.push(row);
@@ -441,6 +446,7 @@ async function startSplit() {
                             }
                         }
                     });
+                    }
                 },
                 complete: function() { resolve(); }
             });

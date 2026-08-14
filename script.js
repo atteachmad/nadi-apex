@@ -399,6 +399,7 @@ async function startSplit() {
     let closedData = [], openData = [], claimData = [], returnData = [];
     let header = null;
     let codingIndex = -1;
+    let headerLength = 0; // TAMBAHAN: Menyimpan panjang kolom header
     let totalFiles = files.length;
     let processedFiles = 0;
 
@@ -419,6 +420,14 @@ async function startSplit() {
         // Lewati jika seluruh isi baris benar-benar kosong melompong (sisa enter)
         if (row.join('').trim() === '') return;
 
+        // ===============================================================
+        // KUNCI PERBAIKAN 1: Normalisasi Panjang Baris (Ragged Arrays Fix)
+        // Jika baris CSV lebih pendek dari header (sel buntung di kanan), tambahkan string kosong.
+        // ===============================================================
+        while (row.length < headerLength) {
+            row.push('');
+        }
+
         let codeVal = row[codingIndex];
         let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
 
@@ -426,8 +435,8 @@ async function startSplit() {
         if (['', 'NAN', 'NULL', '<NA>'].includes(code)) {
             code = 'BLANK';
             // ===============================================================
-            // KUNCI PERBAIKAN: Suntikkan/paksa sel array untuk berisi teks 'BLANK'.
-            // Mencegah baris buntung pada CSV sehingga pasti terbaca di Filter Excel.
+            // KUNCI PERBAIKAN 2: Karena row sudah dipanjangkan di Kunci 1, 
+            // sekarang menyuntikkan 'BLANK' ke indeks ini pasti akan berhasil.
             // ===============================================================
             row[codingIndex] = 'BLANK'; 
         }
@@ -461,6 +470,7 @@ async function startSplit() {
                             if (foundIdx !== -1) {
                                 header = rows[r];
                                 codingIndex = foundIdx;
+                                headerLength = header.length; // Simpan panjang header
                                 closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
                                 rows = rows.slice(r + 1);
                                 break;
@@ -499,7 +509,9 @@ async function startSplit() {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) {
-                                        header = rows[r]; codingIndex = foundIdx;
+                                        header = rows[r]; 
+                                        codingIndex = foundIdx;
+                                        headerLength = header.length; // Simpan panjang header
                                         closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
                                         rows = rows.slice(r + 1); break;
                                     }

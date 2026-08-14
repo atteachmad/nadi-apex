@@ -112,7 +112,7 @@ function switchTab(tabId) {
     document.getElementById('header-title').innerText = titles[tabId];
 
     // Simpan Tab yang sedang dibuka sehingga Refresh Otomatis tidak akan mereset Tab UI
-    sessionStorage.setItem('nadi_active_tab', tabId);
+    localStorage.setItem('nadi_active_tab', tabId);
 
     if (window.innerWidth < 768) {
         const sidebar = document.getElementById('sidebar');
@@ -122,7 +122,7 @@ function switchTab(tabId) {
 
 // Saat browser memuat, ambil tab yang terakhir disimpan di memori
 document.addEventListener("DOMContentLoaded", () => {
-    const activeTab = sessionStorage.getItem('nadi_active_tab') || 'parquet';
+    const activeTab = localStorage.getItem('nadi_active_tab') || 'parquet';
     switchTab(activeTab);
 });
 
@@ -315,7 +315,7 @@ async function startParquetProcess() {
 
 // --- 3. DATA SPLITTER LOGIC ---
 const statusMapping = {
-    'BY': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'BLANK': 'Open', '': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'IP3': 'Open', 'HL5': 'Open', 'HL3': 'Open', 'HL1': 'Open', 'WH5': 'Open', 'HL4': 'Open', 'HL2': 'Open', 'T02': 'Open', 'X72': 'Open', 'X71': 'Open', 'X31': 'Open', 'BI2': 'Open', 'BI3': 'Open', 'WM': 'Open', 'DP3': 'Open', 'DP4': 'Open', 'CR7': 'Open', 'CR8': 'Open',
+    'BY': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'BLANK': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'IP3': 'Open', 'HL5': 'Open', 'HL3': 'Open', 'HL1': 'Open', 'WH5': 'Open', 'HL4': 'Open', 'HL2': 'Open', 'T02': 'Open', 'X72': 'Open', 'X71': 'Open', 'X31': 'Open', 'BI2': 'Open', 'BI3': 'Open', 'WM': 'Open', 'DP3': 'Open', 'DP4': 'Open', 'CR7': 'Open', 'CR8': 'Open',
     'D01': 'Closed', 'D02': 'Closed', 'D03': 'Closed', 'D04': 'Closed', 'D05': 'Closed', 'D06': 'Closed', 'D07': 'Closed', 'D08': 'Closed', 'D09': 'Closed', 'D10': 'Closed', 'D11': 'Closed', 'D12': 'Closed', 'D15': 'Closed', 'D16': 'Closed', 'DB1': 'Closed', 'DB2': 'Closed', 'R01': 'Closed', 'R02': 'Closed', 'R03': 'Closed', 'R04': 'Closed', 'R05': 'Closed', 'R06': 'Closed', 'R07': 'Closed', 'R08': 'Closed', 'R09': 'Closed', 'R10': 'Closed', 'R11': 'Closed', 'R12': 'Closed', 'R13': 'Closed', 'DP5': 'Closed','D1': 'Closed', 'DP1': 'Closed', 'D18': 'Closed', 'D17': 'Closed', 'UF': 'Closed',
     'CR1': 'Return',
     'U14': 'Claim', 'C05': 'Claim', 'D24': 'Claim', 'D25': 'Claim', 'D37': 'Claim', 'C01': 'Claim', 'U37': 'Claim', 'R37': 'Claim', 'R26': 'Claim', 'R24': 'Claim', 'R25': 'Claim', 'D32': 'Claim', 'D31': 'Claim', 'D30': 'Claim', 'D29': 'Claim', 'D28': 'Claim', 'D27': 'Claim', 'C02': 'Claim', 'C01': 'Claim', 'C04': 'Claim', 'C06': 'Claim', 'D26': 'Claim', 'CR4': 'Claim', 'PS8': 'Claim', 'PS4': 'Claim', 'PS1': 'Claim',
@@ -402,36 +402,6 @@ async function startSplit() {
     };
     const SEARCH_LIMIT = 200; 
 
-    // ==========================================================
-    // HELPER: Standarisasi Data Cleansing & Normalization 
-    // ==========================================================
-    const processRow = (row) => {
-        if (!row || !Array.isArray(row)) return;
-        
-        // Lewati jika seluruh isi baris benar-benar kosong melompong (sisa enter)
-        if (row.join('').trim() === '') return;
-
-        let codeVal = row[codingIndex];
-        let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
-
-        // Parameter Logika: Jika kosong atau bernilai error, ubah jadi BLANK
-        if (['', 'NAN', 'NULL', '<NA>'].includes(code)) {
-            code = 'BLANK';
-        }
-
-        // Penentuan kategori berdasarkan statusMapping
-        let cat = 'OPEN';
-        if (code !== 'BLANK') {
-            cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-        }
-
-        // Distribusikan ke file yang tepat
-        if (cat === 'CLOSED') closedData.push(row);
-        else if (cat === 'CLAIM') claimData.push(row);
-        else if (cat === 'RETURN') returnData.push(row);
-        else openData.push(row); // Data BLANK akan otomatis masuk ke sini
-    };
-
     try {
         for (let i = 0; i < totalFiles; i++) {
             const file = files[i];
@@ -463,9 +433,16 @@ async function startSplit() {
                     }
 
                     if (codingIndex !== -1) {
-                        // Jalankan Normalization Pipeline pada data Excel
                         for (let row of rows) {
-                            processRow(row);
+                            if (!row || !Array.isArray(row)) continue;
+                            let codeVal = row[codingIndex];
+                            let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
+                            if (!code) continue; 
+                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
+                            if (cat === 'CLOSED') closedData.push(row);
+                            else if (cat === 'CLAIM') claimData.push(row);
+                            else if (cat === 'RETURN') returnData.push(row);
+                            else openData.push(row);
                         }
                     }
                 }
@@ -479,7 +456,6 @@ async function startSplit() {
                     let isFirstRow = true;
                     Papa.parse(file, {
                         chunkSize: 1024 * 1024 * 5,
-                        skipEmptyLines: true, // Membantu membersihkan enter kosong di akhir file CSV
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
@@ -499,12 +475,17 @@ async function startSplit() {
                                 }
                             }
                             isFirstRow = false;
-                            
                             if (codingIndex === -1) return;
-                            
-                            // Jalankan Normalization Pipeline pada data CSV
                             for (let row of rows) {
-                                processRow(row);
+                                if (!row || !Array.isArray(row)) continue;
+                                let codeVal = row[codingIndex];
+                                let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
+                                if (!code) continue;
+                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
+                                if (cat === 'CLOSED') closedData.push(row);
+                                else if (cat === 'CLAIM') claimData.push(row);
+                                else if (cat === 'RETURN') returnData.push(row);
+                                else openData.push(row);
                             }
                         },
                         complete: function() {

@@ -112,7 +112,7 @@ function switchTab(tabId) {
     document.getElementById('header-title').innerText = titles[tabId];
 
     // Simpan Tab yang sedang dibuka sehingga Refresh Otomatis tidak akan mereset Tab UI
-    localStorage.setItem('nadi_active_tab', tabId);
+    sessionStorage.setItem('nadi_active_tab', tabId);
 
     if (window.innerWidth < 768) {
         const sidebar = document.getElementById('sidebar');
@@ -122,7 +122,7 @@ function switchTab(tabId) {
 
 // Saat browser memuat, ambil tab yang terakhir disimpan di memori
 document.addEventListener("DOMContentLoaded", () => {
-    const activeTab = localStorage.getItem('nadi_active_tab') || 'parquet';
+    const activeTab = sessionStorage.getItem('nadi_active_tab') || 'parquet';
     switchTab(activeTab);
 });
 

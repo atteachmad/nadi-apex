@@ -391,6 +391,7 @@ async function startSplit() {
     let closedData = [], openData = [], claimData = [], returnData = [];
     let header = null;
     let codingIndex = -1;
+    let headerLength = 0; // TAMBAHAN: Menyimpan panjang kolom header
     let totalFiles = files.length;
     let processedFiles = 0;
 
@@ -401,6 +402,49 @@ async function startSplit() {
         return row.findIndex(col => String(col || '').toUpperCase().includes('CODING'));
     };
     const SEARCH_LIMIT = 200; 
+
+    // ==========================================================
+    // HELPER: Standarisasi Data Cleansing & Normalization 
+    // ==========================================================
+    const processRow = (row) => {
+        if (!row || !Array.isArray(row)) return;
+        
+        // Lewati jika seluruh isi baris benar-benar kosong melompong (sisa enter)
+        if (row.join('').trim() === '') return;
+
+        // ===============================================================
+        // KUNCI PERBAIKAN 1: Normalisasi Panjang Baris (Ragged Arrays Fix)
+        // Jika baris CSV lebih pendek dari header (sel buntung di kanan), tambahkan string kosong.
+        // ===============================================================
+        while (row.length < headerLength) {
+            row.push('');
+        }
+
+        let codeVal = row[codingIndex];
+        let code = String(codeVal === undefined || codeVal === null ? '' : codeVal).trim().toUpperCase();
+
+        // Parameter Logika: Jika kosong atau bernilai error, ubah jadi teks BLANK
+        if (['', 'NAN', 'NULL', '<NA>'].includes(code)) {
+            code = 'BLANK';
+            // ===============================================================
+            // KUNCI PERBAIKAN 2: Karena row sudah dipanjangkan di Kunci 1, 
+            // sekarang menyuntikkan 'BLANK' ke indeks ini pasti akan berhasil.
+            // ===============================================================
+            row[codingIndex] = 'BLANK'; 
+        }
+
+        // Penentuan kategori berdasarkan statusMapping
+        let cat = 'OPEN';
+        if (statusMapping[code]) {
+            cat = statusMapping[code].trim().toUpperCase();
+        }
+
+        // Distribusikan ke file yang tepat
+        if (cat === 'CLOSED') closedData.push(row);
+        else if (cat === 'CLAIM') claimData.push(row);
+        else if (cat === 'RETURN') returnData.push(row);
+        else openData.push(row); // Data BLANK akan otomatis masuk ke sini
+    };
 
     try {
         for (let i = 0; i < totalFiles; i++) {
@@ -418,6 +462,7 @@ async function startSplit() {
                             if (foundIdx !== -1) {
                                 header = rows[r];
                                 codingIndex = foundIdx;
+                                headerLength = header.length; // Simpan panjang header
                                 closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
                                 rows = rows.slice(r + 1);
                                 break;
@@ -434,15 +479,7 @@ async function startSplit() {
 
                     if (codingIndex !== -1) {
                         for (let row of rows) {
-                            if (!row || !Array.isArray(row)) continue;
-                            let codeVal = row[codingIndex];
-                            let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                            if (!code) continue; 
-                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-                            if (cat === 'CLOSED') closedData.push(row);
-                            else if (cat === 'CLAIM') claimData.push(row);
-                            else if (cat === 'RETURN') returnData.push(row);
-                            else openData.push(row);
+                            processRow(row);
                         }
                     }
                 }
@@ -456,6 +493,7 @@ async function startSplit() {
                     let isFirstRow = true;
                     Papa.parse(file, {
                         chunkSize: 1024 * 1024 * 5,
+                        skipEmptyLines: true, 
                         chunk: function(results) {
                             let rows = results.data;
                             if (rows.length === 0) return;
@@ -463,7 +501,9 @@ async function startSplit() {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) {
-                                        header = rows[r]; codingIndex = foundIdx;
+                                        header = rows[r]; 
+                                        codingIndex = foundIdx;
+                                        headerLength = header.length; // Simpan panjang header
                                         closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
                                         rows = rows.slice(r + 1); break;
                                     }
@@ -475,17 +515,11 @@ async function startSplit() {
                                 }
                             }
                             isFirstRow = false;
+                            
                             if (codingIndex === -1) return;
+                            
                             for (let row of rows) {
-                                if (!row || !Array.isArray(row)) continue;
-                                let codeVal = row[codingIndex];
-                                let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                                if (!code) continue;
-                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-                                if (cat === 'CLOSED') closedData.push(row);
-                                else if (cat === 'CLAIM') claimData.push(row);
-                                else if (cat === 'RETURN') returnData.push(row);
-                                else openData.push(row);
+                                processRow(row);
                             }
                         },
                         complete: function() {

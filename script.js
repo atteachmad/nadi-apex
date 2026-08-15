@@ -388,8 +388,14 @@ async function startSplit() {
     if (progPercent) progPercent.innerText = '0%';
     if (progStatus) progStatus.innerText = 'Memulai pemisahan data...';
 
-    let closedData = [], openData = [], claimData = [], returnData = [];
-    let header = null;
+    // Inisialisasi memory structure yang digunakan di Lampiran 1
+    let memory = {
+        'Open': { data: [], bytes: 0, part: 1 },
+        'Closed': { data: [], bytes: 0, part: 1 },
+        'Return': { data: [], bytes: 0, part: 1 },
+        'Claim': { data: [], bytes: 0, part: 1 }
+    };
+    let headerRow = [];
     let codingIndex = -1;
     let totalFiles = files.length;
     let processedFiles = 0;
@@ -412,13 +418,15 @@ async function startSplit() {
             if (isExcel) {
                 let rows = await readExcelFile(file);
                 if (rows && rows.length > 0) {
-                    if (!header) {
+                    if (headerRow.length === 0) {
                         for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                             let foundIdx = findHeaderIndex(rows[r]);
                             if (foundIdx !== -1) {
-                                header = rows[r];
+                                headerRow = rows[r];
                                 codingIndex = foundIdx;
-                                closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
+                                ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
+                                    if(memory[cat].data.length === 0) memory[cat].data.push(headerRow);
+                                });
                                 rows = rows.slice(r + 1);
                                 break;
                             }
@@ -433,17 +441,32 @@ async function startSplit() {
                     }
 
                     if (codingIndex !== -1) {
-                        for (let row of rows) {
-                            if (!row || !Array.isArray(row)) continue;
-                            let codeVal = row[codingIndex];
-                            let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                            if (!code) continue; 
-                            let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-                            if (cat === 'CLOSED') closedData.push(row);
-                            else if (cat === 'CLAIM') claimData.push(row);
-                            else if (cat === 'RETURN') returnData.push(row);
-                            else openData.push(row);
-                        }
+                        // Logika inti seperti Lampiran 1 (tidak mengubah baris fisik, murni pemetaan kategori)
+                        rows.forEach(row => {
+                            if (!row || !Array.isArray(row)) return;
+
+                            let code = row[codingIndex];
+                            if(!code) code = 'BLANK';
+                            code = String(code).trim().toUpperCase();
+                            if(['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
+
+                            const status = statusMapping[code];
+                            if(status && memory[status]) {
+                                memory[status].data.push(row);
+                                memory[status].bytes += row.join(",").length;
+                                
+                                let isLimitReached = format === 'csv' ? 
+                                    (memory[status].bytes >= MAX_BYTES) : 
+                                    (memory[status].data.length >= MAX_EXCEL_ROWS);
+                                    
+                                if(isLimitReached) {
+                                    exportData(memory[status].data, format, `${status}_Part${memory[status].part}`);
+                                    memory[status].part++;
+                                    memory[status].data = [headerRow];
+                                    memory[status].bytes = 0;
+                                }
+                            }
+                        });
                     }
                 }
                 processedFiles++;
@@ -455,38 +478,63 @@ async function startSplit() {
                 await new Promise((resolve) => {
                     let isFirstRow = true;
                     Papa.parse(file, {
-                        chunkSize: 1024 * 1024 * 5,
-                        chunk: function(results) {
+                        header: false, skipEmptyLines: true, chunkSize: 1024 * 1024 * 5,
+                        chunk: function(results, parser) {
                             let rows = results.data;
-                            if (rows.length === 0) return;
-                            if (!header) {
+                            if (isFirstRow && rows.length > 0 && headerRow.length === 0) {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) {
-                                        header = rows[r]; codingIndex = foundIdx;
-                                        closedData.push(header); openData.push(header); claimData.push(header); returnData.push(header);
-                                        rows = rows.slice(r + 1); break;
+                                        headerRow = rows[r];
+                                        codingIndex = foundIdx;
+                                        ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
+                                            if(memory[cat].data.length === 0) memory[cat].data.push(headerRow);
+                                        });
+                                        rows = rows.slice(r + 1);
+                                        break;
                                     }
                                 }
+                                if (codingIndex === -1) {
+                                    showToast(`Kolom 'CODING' tidak ditemukan di file ${file.name}`, "error");
+                                    parser.abort(); return;
+                                }
+                                isFirstRow = false;
                             } else if (isFirstRow) {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
                                     if (foundIdx !== -1) { rows = rows.slice(r + 1); break; }
                                 }
+                                isFirstRow = false;
                             }
-                            isFirstRow = false;
+
                             if (codingIndex === -1) return;
-                            for (let row of rows) {
-                                if (!row || !Array.isArray(row)) continue;
-                                let codeVal = row[codingIndex];
-                                let code = String(codeVal === undefined ? '' : codeVal).trim().toUpperCase();
-                                if (!code) continue;
-                                let cat = (typeof statusMapping !== 'undefined' && statusMapping[code]) ? statusMapping[code].trim().toUpperCase() : 'OPEN';
-                                if (cat === 'CLOSED') closedData.push(row);
-                                else if (cat === 'CLAIM') claimData.push(row);
-                                else if (cat === 'RETURN') returnData.push(row);
-                                else openData.push(row);
-                            }
+
+                            // Logika inti seperti Lampiran 1 (tidak mengubah baris fisik, murni pemetaan kategori)
+                            rows.forEach(row => {
+                                if (!row || !Array.isArray(row)) return;
+
+                                let code = row[codingIndex];
+                                if(!code) code = 'BLANK';
+                                code = String(code).trim().toUpperCase();
+                                if(['NAN', 'NULL', '<NA>', ''].includes(code)) code = 'BLANK';
+
+                                const status = statusMapping[code];
+                                if(status && memory[status]) {
+                                    memory[status].data.push(row);
+                                    memory[status].bytes += row.join(",").length;
+                                    
+                                    let isLimitReached = format === 'csv' ? 
+                                        (memory[status].bytes >= MAX_BYTES) : 
+                                        (memory[status].data.length >= MAX_EXCEL_ROWS);
+                                        
+                                    if(isLimitReached) {
+                                        exportData(memory[status].data, format, `${status}_Part${memory[status].part}`);
+                                        memory[status].part++;
+                                        memory[status].data = [headerRow];
+                                        memory[status].bytes = 0;
+                                    }
+                                }
+                            });
                         },
                         complete: function() {
                             processedFiles++;
@@ -504,10 +552,13 @@ async function startSplit() {
         await delay(300);
 
         let exported = false;
-        if (closedData.length > 1) { exportData(closedData, format, 'DATA_CLOSED'); exported = true; }
-        if (openData.length > 1) { exportData(openData, format, 'DATA_OPEN'); exported = true; }
-        if (claimData.length > 1) { exportData(claimData, format, 'DATA_CLAIM'); exported = true; }
-        if (returnData.length > 1) { exportData(returnData, format, 'DATA_RETURN'); exported = true; }
+        ['Open', 'Closed', 'Return', 'Claim'].forEach(cat => {
+            if(memory[cat].data.length > 1) { 
+                let fname = memory[cat].part > 1 ? `DATA_${cat.toUpperCase()}_Part${memory[cat].part}` : `DATA_${cat.toUpperCase()}`;
+                exportData(memory[cat].data, format, fname);
+                exported = true;
+            }
+        });
 
         if (!exported) {
             showToast("Tidak ada data yang berhasil dipisahkan. Pastikan file memiliki kolom CODING.", "error");

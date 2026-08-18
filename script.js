@@ -204,6 +204,9 @@ function toggleParquetMode() {
     else masterSection.classList.add('hidden');
 }
 
+// ==========================================================
+// PARQUET INJECTOR LOGIC
+// ==========================================================
 async function startParquetProcess() {
     const mode = document.querySelector('input[name="parquet-mode"]:checked').value;
     const colMode = document.querySelector('input[name="parquet-col-mode"]:checked').value;
@@ -244,21 +247,43 @@ async function startParquetProcess() {
             let fileName = `input_${i}.csv`;
             progStatus.innerText = `Memproses File: ${file.name} ...`;
 
+            // EKSTRAKSI & NORMALISASI DATA (String/Varchar Force Converter)
+            let csvStr = "";
             if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
-                const csvStr = await new Promise((resolve) => {
+                csvStr = await new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
-                        // FORCE RAW: FALSE agar tanggal tidak hancur saat format conversion
-                        const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array', cellDates: false, raw: false});
-                        resolve(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
+                        const data = new Uint8Array(e.target.result);
+                        // Perlindungan Tipe Data Raw untuk Tanggal & Number
+                        const workbook = XLSX.read(data, {type: 'array', cellDates: false, raw: false});
+                        const sheetName = workbook.SheetNames[0];
+                        // Convert sheet to json matrix (array of array)
+                        const jsonMatrix = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1, defval: '', raw: false});
+                        
+                        // PERBAIKAN: Paksa setiap sel menjadi tipe Teks (String) agar DuckDB tidak bingung dengan data kotor/campuran.
+                        for(let r=0; r<jsonMatrix.length; r++) {
+                            for(let c=0; c<jsonMatrix[r].length; c++) {
+                                jsonMatrix[r][c] = String(jsonMatrix[r][c]).replace(/\n/g, ' ').trim();
+                            }
+                        }
+                        
+                        // Parse back to CSV menggunakan PapaParse (jauh lebih aman dari SheetJS to CSV)
+                        resolve(Papa.unparse(jsonMatrix));
                     };
                     reader.readAsArrayBuffer(file);
                 });
                 await db.registerFileText(fileName, csvStr);
             } else {
-                await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+                 // Untuk CSV bawaan, kita parse dulu menjadi string
+                 csvStr = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsText(file);
+                });
+                await db.registerFileText(fileName, csvStr);
             }
 
+            // Baca Header yang sudah tersanitasi
             const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
             const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
 
@@ -271,6 +296,7 @@ async function startParquetProcess() {
                 } else if (colMode === 'drop') {
                     validCols = actualCols.filter(c => !customCols.includes(c));
                 }
+                // Pastikan kolom yang diselect menggunakan quote agar aman dari spasi/karakter khusus
                 selectQuery = validCols.map(c => `"${c}"`).join(", ");
             }
 
@@ -313,7 +339,9 @@ async function startParquetProcess() {
     }
 }
 
-// --- 3. DATA SPLITTER LOGIC ---
+// ==========================================================
+// DATA SPLITTER LOGIC
+// ==========================================================
 const statusMapping = {
     'BY': 'Open', 'CR3': 'Open', 'CR5': 'Open', 'CR6': 'Open', 'NT': 'Open', 'OC': 'Open', 'OS': 'Open', 'DL': 'Open', 'UND': 'Open', 'RD': 'Open', 'OP3': 'Open', 'UN STATUS': 'Open', 'UN RUNSHEET': 'Open', 'UN RECEIVING': 'Open', 'UN INBOUND': 'Open', 'UN MANIFEST': 'Open', 'PROSES TODAY': 'Open', 'UN RUNSHEET 1': 'Open', 'UN RECEIVED': 'Open', 'UN HVI': 'Open', 'UN HVO': 'Open', 'UN DO': 'Open', 'X1': 'Open', 'X2': 'Open', 'X3.1': 'Open', 'X3.2': 'Open', 'X4': 'Open', 'X5': 'Open', 'X6': 'Open', 'X7.1': 'Open', 'X7.2': 'Open', 'X8': 'Open', 'X9': 'Open', 'X10': 'Open', 'U21': 'Open', 'U22': 'Open', 'U23': 'Open', 'U24': 'Open', 'U25': 'Open', 'BLANK': 'Open', 'WH1': 'Open', 'WH2': 'Open', 'WH3': 'Open', 'WH4': 'Open', 'PS2': 'Open', 'PS3': 'Open', 'PS5': 'Open', 'PS6': 'Open', 'PS7': 'Open', 'CL1': 'Open', 'CL2': 'Open', 'CL4': 'Open', 'HD7': 'Open', 'RFD': 'Open', 'HD8': 'Open', 'HD9': 'Open', 'CL3': 'Open', 'CR2': 'Open', 'U01': 'Open', 'U02': 'Open', 'U03': 'Open', 'U04': 'Open', 'U05': 'Open', 'U06': 'Open', 'U07': 'Open', 'U08': 'Open', 'U09': 'Open', 'U10': 'Open', 'U11': 'Open', 'U12': 'Open', 'U13': 'Open', 'UB2': 'Open', 'AL8': 'Open', 'A02': 'Open', 'A08': 'Open', 'A11': 'Open', 'AL3': 'Open', 'A03': 'Open', 'A07': 'Open', 'AL4': 'Open', 'KRK': 'Open', 'MR': 'Open', 'A04': 'Open', 'A10': 'Open', 'CW': 'Open', 'CA': 'Open', 'A06': 'Open', 'T10': 'Open', 'IP3': 'Open', 'HL5': 'Open', 'HL3': 'Open', 'HL1': 'Open', 'WH5': 'Open', 'HL4': 'Open', 'HL2': 'Open', 'T02': 'Open', 'X72': 'Open', 'X71': 'Open', 'X31': 'Open', 'BI2': 'Open', 'BI3': 'Open', 'WM': 'Open', 'DP3': 'Open', 'DP4': 'Open', 'DP5': 'Open', 'CR7': 'Open', 'CR8': 'Open',
     'D01': 'Closed', 'D02': 'Closed', 'D03': 'Closed', 'D04': 'Closed', 'D05': 'Closed', 'D06': 'Closed', 'D07': 'Closed', 'D08': 'Closed', 'D09': 'Closed', 'D10': 'Closed', 'D11': 'Closed', 'D12': 'Closed', 'D15': 'Closed', 'D16': 'Closed', 'DB1': 'Closed', 'DB2': 'Closed', 'R01': 'Closed', 'R02': 'Closed', 'R03': 'Closed', 'R04': 'Closed', 'R05': 'Closed', 'R06': 'Closed', 'R07': 'Closed', 'R08': 'Closed', 'R09': 'Closed', 'R10': 'Closed', 'R11': 'Closed', 'R12': 'Closed', 'R13': 'Closed','D1': 'Closed', 'DP1': 'Closed', 'D18': 'Closed', 'D17': 'Closed', 'UF': 'Closed',
@@ -427,6 +455,7 @@ async function startSplit() {
                         for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                             let foundIdx = findHeaderIndex(rows[r]);
                             if (foundIdx !== -1) {
+                                codingIndex = foundIdx;
                                 rows = rows.slice(r + 1); break;
                             }
                         }
@@ -481,7 +510,8 @@ async function startSplit() {
                             } else if (isFirstRow) {
                                 for (let r = 0; r < Math.min(rows.length, SEARCH_LIMIT); r++) {
                                     let foundIdx = findHeaderIndex(rows[r]);
-                                    if (foundIdx !== -1) { rows = rows.slice(r + 1); break; }
+                                    if (foundIdx !== -1) { codingIndex = foundIdx;
+                                        rows = rows.slice(r + 1); break; }
                                 }
                             }
                             isFirstRow = false;
@@ -544,7 +574,9 @@ async function startSplit() {
     }
 }
 
-// --- 2. DATA MERGER LOGIC ---
+// ==========================================================
+// DATA MERGER LOGIC
+// ==========================================================
 async function startMerge() {
     const files = document.getElementById('merge-files').files;
     const format = document.getElementById('merge-format').value;
@@ -666,7 +698,9 @@ async function startMerge() {
     }
 }
 
-// --- 4. SPLIT BY ROWS LOGIC ---
+// ==========================================================
+// SPLIT BY ROWS LOGIC
+// ==========================================================
 async function startRowSplit() {
     const files = document.getElementById('row-files').files;
     if (files.length === 0) return showToast('Silakan pilih/tarik file terlebih dahulu!', 'error');
@@ -754,7 +788,9 @@ async function startRowSplit() {
     }
 }
 
-// --- 6. AUDIO & TEXT LOGIC ---
+// ==========================================================
+// AUDIO & TEXT LOGIC
+// ==========================================================
 const sttTextarea = document.getElementById('stt-result');
 const sttBtnToggle = document.getElementById('btn-stt-toggle');
 const sttBtnText = document.getElementById('stt-btn-text');
@@ -888,7 +924,9 @@ if(btnTtsStop) {
     });
 }
 
-// --- 7. GOOGLE MAPS SCRAPER LOGIC & FALLBACK ENGINE ---
+// ==========================================================
+// GOOGLE MAPS SCRAPER LOGIC & FALLBACK ENGINE
+// ==========================================================
 function downloadCustomGmapsTemplate() {
     try {
         const templateData = [

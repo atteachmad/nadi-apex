@@ -8,9 +8,74 @@ tailwind.config = {
 // --- FUNGSI HELPER GLOBAL ---
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
-// ==========================================================
-// UX CENTER MODAL NOTIFICATION SYSTEM & AUTO REFRESH
-// ==========================================================
+// ---KONFIGURASI: REGISTRASI, TRACKING & DONASI---
+const NADI_API_URL = 'https://script.google.com/macros/s/AKfycbzuc8Y7xCULKv2gH4jSjP2FTVS9RLFGMFl7rgZy0-tbr27DcHmrhmUhZuUVycBrsbwz/exec'; // GANTI dengan URL /exec Anda
+const REQUIRE_REGISTRATION = true;   // false = registrasi tidak wajib
+const DONATE_COOLDOWN_DAYS = 7;      // jeda jika klik "Nanti saja"
+const DONATE_DONE_COOLDOWN_DAYS = 60; // jeda jika klik "Sudah donasi"
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function nadiGetUser() {
+    try { return JSON.parse(localStorage.getItem('nadi_user') || 'null'); } catch (e) { return null; }
+}
+
+function nadiSend(payload) {
+    if (!NADI_API_URL || NADI_API_URL.includes('XXXX')) return;
+    try {
+        // text/plain + no-cors menghindari preflight CORS; keepalive agar terkirim walau halaman reload
+        fetch(NADI_API_URL, {
+            method: 'POST', mode: 'no-cors', keepalive: true,
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        }).catch(() => {});
+    } catch (e) {}
+}
+
+function trackUsage(feature, fileCount) {
+    const u = nadiGetUser();
+    if (!u) return;
+    nadiSend({ type: 'usage', email: u.email, feature: feature, files: fileCount || 0 });
+}
+
+function showRegisterModal() {
+    const m = document.getElementById('register-modal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+}
+
+function submitRegister() {
+    const name = document.getElementById('register-name').value.trim();
+    const email = document.getElementById('register-email').value.trim().toLowerCase();
+    const consent = document.getElementById('register-consent').checked;
+    const err = document.getElementById('register-error');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.innerText = 'Format email tidak valid.'; return; }
+    if (!consent) { err.innerText = 'Anda perlu menyetujui penggunaan data untuk melanjutkan.'; return; }
+    try { localStorage.setItem('nadi_user', JSON.stringify({ name, email, consentAt: new Date().toISOString() })); } catch (e) {}
+    nadiSend({ type: 'register', name, email, consent: true });
+    const m = document.getElementById('register-modal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+}
+
+function maybeShowDonate(force = false) {
+    let next = 0;
+    try { next = parseInt(localStorage.getItem('nadi_donate_next') || '0', 10); } catch (e) {}
+    if (!force && Date.now() < next) return;
+    const m = document.getElementById('donate-modal');
+    if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+}
+
+function closeDonate(alreadyDonated) {
+    const m = document.getElementById('donate-modal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+    const days = alreadyDonated ? DONATE_DONE_COOLDOWN_DAYS : DONATE_COOLDOWN_DAYS;
+    try { localStorage.setItem('nadi_donate_next', String(Date.now() + days * 86400000)); } catch (e) {}
+}
+
+
+// --- UX CENTER MODAL NOTIFICATION SYSTEM & AUTO REFRESH ---
+
 function showToast(message, type = 'success', requireRefresh = false) {
     const container = document.getElementById('toast-container');
     const overlay = document.getElementById('toast-overlay');
@@ -28,7 +93,7 @@ function showToast(message, type = 'success', requireRefresh = false) {
     
     toast.innerHTML = `
         <i class="fas ${icon} text-5xl drop-shadow-md"></i>
-        <div class="text-sm md:text-base font-semibold w-full break-words leading-relaxed">${message}</div>
+        <div class="text-sm md:text-base font-semibold w-full break-words leading-relaxed">${escapeHtml(message)}</div>
         <button class="toast-close-btn mt-2 px-6 py-2.5 bg-black/20 hover:bg-black/40 rounded-lg text-white font-bold transition w-full focus:outline-none tracking-wider">
             TUTUP
         </button>
@@ -55,8 +120,11 @@ function showToast(message, type = 'success', requireRefresh = false) {
             if(container.children.length === 0) overlay.classList.add('hidden');
             
             // JIKA SUCCESS & MEMBUTUHKAN REFRESH, JALANKAN REFRESH SAAT DI TUTUP
-            if (requireRefresh) window.location.reload();
-        }, 300);
+            if (requireRefresh) {
+            try { localStorage.setItem('nadi_donate_pending', '1'); } catch (e) {}
+            window.location.reload();
+            }
+            }, 300);
     };
 
     // Auto-Close hanya untuk info/error (Tanpa reload)
@@ -124,6 +192,13 @@ function switchTab(tabId) {
 document.addEventListener("DOMContentLoaded", () => {
     const activeTab = sessionStorage.getItem('nadi_active_tab') || 'parquet';
     switchTab(activeTab);
+
+    if (REQUIRE_REGISTRATION && !nadiGetUser()) {
+        showRegisterModal();
+    } else if (localStorage.getItem('nadi_donate_pending') === '1') {
+        localStorage.removeItem('nadi_donate_pending');
+        setTimeout(() => maybeShowDonate(), 600);
+    }
 });
 
 // --- 2. LOGIC DRAG & DROP & FILES ---
@@ -284,7 +359,7 @@ async function startParquetProcess() {
             }
 
             // Baca Header yang sudah tersanitasi
-            const resHeaders = await conn.query(`DESCRIBE SELECT * FROM '${fileName}'`);
+            const resHeaders = await conn.query(`DESCRIBE SELECT * read_csv('${fileName}', header=true, all_varchar=true)`);
             const actualCols = resHeaders.toArray().map(r => r.column_name.toUpperCase());
 
             let selectQuery = "*";
@@ -301,9 +376,9 @@ async function startParquetProcess() {
             }
 
             if (mode === 'create' && i === 0) {
-                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM '${fileName}'`);
+                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} read_csv('${fileName}', header=true, all_varchar=true)`);
             } else {
-                await conn.query(`INSERT INTO master_table SELECT ${selectQuery} FROM '${fileName}'`);
+                   await conn.query(`INSERT INTO master_table BY NAME SELECT ${selectQuery} FROM read_csv('${fileName}', header=true, all_varchar=true)`);
             }
         }
 
@@ -328,6 +403,7 @@ async function startParquetProcess() {
 
         progBar.style.width = '100%';
         progStatus.innerText = "Selesai! File Parquet siap ditarik.";
+        trackUsage('parquet', inputFiles.length);
         // Memberikan true parameter untuk Reload pada Klik 'Tutup'
         showToast(`SUKSES! File Parquet berhasil diunduh. Silahkan klik Tutup untuk menyegarkan sistem.`, 'success', true);
 
@@ -564,6 +640,7 @@ async function startSplit() {
             if (progStatus) progStatus.innerText = 'Gagal memisahkan data.';
         } else {
             if (progStatus) progStatus.innerText = 'Pemisahan selesai!';
+            trackUsage('splitter', totalFiles);
             showToast('Pemisahan Selesai! Klik tutup untuk segarkan aplikasi.', 'success', true);
         }
     } catch (error) {
@@ -685,6 +762,7 @@ async function startMerge() {
         if (mergedData.length > 1) {
             exportData(mergedData, format, outputFilename); 
             if (progStatus) progStatus.innerText = 'Penggabungan selesai!';
+            trackUsage('merger', totalFiles);
             showToast('Penggabungan File Selesai! Klik tutup untuk segarkan aplikasi.', 'success', true);
         } else {
             showToast("Tidak ada data yang berhasil digabungkan.", "error");
@@ -780,6 +858,7 @@ async function startRowSplit() {
             document.getElementById('row-percent').innerText = `${pct}%`;
         }
         progStatus.innerText = "Pemotongan Selesai!";
+        trackUsage('rowsplit', files.length);
         showToast('Proses Split Rows Sukses! Klik tutup untuk segarkan aplikasi.', 'success', true);
     } catch (e) {
         showToast('Error: ' + e.message, 'error');
@@ -1019,7 +1098,7 @@ async function startCustomMapsScraper() {
     const printLog = (text, type = "INFO") => {
         let color = type === "ERROR" ? "text-red-500" : (type === "WARN" ? "text-yellow-400" : (type === "SYSTEM" ? "text-blue-400" : (type === "SUCCESS" ? "text-green-500" : "text-gray-300")));
         let time = new Date().toLocaleTimeString('id-ID', {hour12:false});
-        logBox.innerHTML += `<div><span class="text-gray-500">[${time}]</span> <span class="${color} font-bold">[${type}]</span> ${text}</div>`;
+        logBox.innerHTML += `<div><span class="text-gray-500">[${time}]</span> <span class="${color} font-bold">[${type}]</span> ${escapeHtml(text)}</div>`;
         logBox.scrollTop = logBox.scrollHeight;
     };
 
@@ -1092,7 +1171,7 @@ async function startCustomMapsScraper() {
         exportData(finalData, 'xlsx', `Nadi_Maps_Scraper_${new Date().getTime()}`);
         progStatus.innerText = "Selesai! File berhasil diunduh.";
         printLog("Proses selesai tanpa bantuan backend server!", "SYSTEM");
-        
+        trackUsage('maps', 1); 
         showToast("Ekstraksi Maps Selesai! Klik tutup untuk segarkan aplikasi.", "success", true);
 
     } catch (error) {

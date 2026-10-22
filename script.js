@@ -11,8 +11,8 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 // ---KONFIGURASI: REGISTRASI, TRACKING & DONASI---
 const NADI_API_URL = 'https://script.google.com/macros/s/AKfycbzuc8Y7xCULKv2gH4jSjP2FTVS9RLFGMFl7rgZy0-tbr27DcHmrhmUhZuUVycBrsbwz/exec'; // GANTI dengan URL /exec Anda
 const REQUIRE_REGISTRATION = true;   // false = registrasi tidak wajib
-const DONATE_COOLDOWN_DAYS = 7;      // jeda jika klik "Nanti saja"
-const DONATE_DONE_COOLDOWN_DAYS = 60; // jeda jika klik "Sudah donasi"
+const DONATE_COOLDOWN_DAYS = 3;      // jeda jika klik "Nanti saja"
+const DONATE_DONE_COOLDOWN_DAYS = 15; // jeda jika klik "Sudah donasi"
 
 function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

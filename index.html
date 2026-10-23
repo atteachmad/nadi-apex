@@ -10,11 +10,11 @@
       <link rel="icon" type="image/png" href="at.png?v=1">
     
     <!-- Dependencies / CDNs -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="tailwind.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>   
     <!-- External CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
@@ -55,6 +55,20 @@
         </div>
     </div>
 </div>
+<!-- MODAL VERIFIKASI JNE -->
+<div id="verify-modal" class="fixed inset-0 z-[10000] hidden items-center justify-center bg-gray-900/80 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h3 class="text-lg font-bold text-nadi-blue"><i class="fas fa-user-shield mr-2"></i>Verifikasi Email JNE</h3>
+        <p class="text-sm text-gray-600 mt-2">Menu <b>Data Splitter</b> khusus internal JNE. Masukkan kode 6 digit yang dikirim ke email JNE Anda.</p>
+        <input id="verify-code" type="text" inputmode="numeric" maxlength="6" placeholder="000000" class="mt-4 w-full p-3 border border-gray-300 rounded text-center text-2xl tracking-widest focus:ring-nadi-blue focus:border-nadi-blue">
+        <p id="verify-msg" class="text-xs mt-2 min-h-[1rem] text-gray-500"></p>
+        <div class="flex gap-2 mt-3">
+            <button onclick="skipVerify()" class="flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg hover:bg-gray-200 transition text-sm">Lewati</button>
+            <button onclick="sendOtp()" class="flex-1 bg-blue-100 text-nadi-blue font-bold py-2.5 rounded-lg hover:bg-blue-200 transition text-sm">Kirim ulang</button>
+            <button onclick="submitVerify()" class="flex-1 bg-nadi-blue text-white font-bold py-2.5 rounded-lg hover:bg-blue-800 transition text-sm">Verifikasi</button>
+        </div>
+    </div>
+</div>
     <!-- SIDEBAR OVERLAY -->
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden transition-opacity md:hidden"></div>
 
@@ -85,7 +99,7 @@
                 <i class="fas fa-database w-6 text-center text-lg flex-shrink-0 text-yellow-400"></i>
                 <span class="hide-on-collapse ml-3">Parquet Injector</span>
             </button>
-            <button onclick="switchTab('splitter')" id="btn-splitter" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700">
+            <button onclick="switchTab('splitter')" id="btn-splitter" class="menu-btn w-full flex items-center p-3 rounded-lg text-blue-100 transition hover:bg-blue-700" style="display:none">
                 <i class="fas fa-cut w-6 text-center text-lg flex-shrink-0"></i>
                 <span class="hide-on-collapse ml-3">Data Splitter</span>
             </button>
@@ -133,7 +147,7 @@
                 <i class="fas fa-mug-hot"></i> <span class="hidden sm:inline">Traktir Kopi</span>
                 </button>
                 <span class="bg-green-100 text-green-700 px-2 md:px-3 py-1 rounded-full text-[10px] md:text-xs font-bold border border-green-200 shadow-sm whitespace-nowrap">
-                    <i class="fas fa-check-circle"></i> <span class="hidden sm:inline">QC Passed</span>
+                <i class="fas fa-code-branch"></i> <span class="hidden sm:inline">v1.3</span>
                 </span>
             </div>
         </header>
@@ -407,7 +421,9 @@
                             <i class="fas fa-file-excel mr-2 text-green-600"></i> Unduh Template Excel
                         </button>
                     </div>
-                    
+                      <div class="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded-lg text-xs text-yellow-800">
+                      <b>Perhatian:</b> alamat dikirim ke layanan geocoding publik (ArcGIS &amp; OpenStreetMap). Maksimal 500 baris per proses. Jangan gunakan data pribadi pelanggan/penerima.
+                      </div>
                     <div id="dropzone-gmaps" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-6 md:p-8 text-center bg-gray-50 cursor-pointer flex flex-col justify-center items-center">
                         <i class="fas fa-cloud-upload-alt text-4xl text-nadi-blue mb-3"></i>
                         <input type="file" id="gmaps-files" accept=".csv,.xlsx,.xls" class="hidden" onchange="updateFileLabel('gmaps-files', 'gmaps-label')">
@@ -429,18 +445,6 @@
                             <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm">
                                 <input type="checkbox" id="opt-address" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
                                 <span>Alamat Lengkap</span>
-                            </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60">
-                                <input type="checkbox" id="opt-rating" checked disabled class="rounded text-gray-400"> 
-                                <span>Rating Google</span>
-                            </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60">
-                                <input type="checkbox" id="opt-reviews" checked disabled class="rounded text-gray-400"> 
-                                <span>Jumlah Ulasan</span>
-                            </label>
-                            <label class="flex items-center space-x-2 bg-gray-100 p-2.5 rounded border border-gray-200 cursor-not-allowed transition shadow-sm opacity-60">
-                                <input type="checkbox" id="opt-phone" disabled class="rounded text-gray-400"> 
-                                <span>No Telepon</span>
                             </label>
                             <label class="flex items-center space-x-2 bg-white p-2.5 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition shadow-sm col-span-2 md:col-span-3">
                                 <input type="checkbox" id="opt-url" checked class="rounded text-nadi-blue focus:ring-nadi-blue"> 
@@ -494,7 +498,7 @@
                             <li>Dilengkapi instruksi filter kolom kustom untuk menyaring kolom yang hanya diperlukan.</li>
                         </ul>
                     </div>
-                    <div>
+                    <div id="about-splitter" style="display:none">
                         <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-cut text-nadi-blue mr-2"></i> 2. Data Splitter</h4>
                         <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
                             <li>Memisahkan file hasil apex berdasarkan kolom <b>CODING</b> (Open, Closed, Return, Claim).</li>
@@ -525,6 +529,14 @@
                             <li>Otomatis melengkapi data Google Maps (Lat/Long, Alamat) secara massal. Dilengkapi Auto-Fallback Regex Algorithm.</li>
                         </ul>
                     </div>
+                        <div>
+                         <h4 class="font-bold text-gray-800 text-base md:text-lg flex items-center"><i class="fas fa-shield-alt text-green-600 mr-2"></i> 7. Privasi &amp; Data</h4>
+                        <ul class="list-disc pl-5 md:pl-6 text-gray-600 mt-2 text-xs md:text-sm space-y-1">
+                        <li>File yang Anda proses diolah di browser Anda dan <b>tidak diunggah</b> ke server kami (kecuali alamat di Maps Scraper yang dikirim ke layanan geocoding publik).</li>
+                        <li>Kami menyimpan nama, email, waktu, dan jenis fitur yang dipakai (tanpa isi file) untuk statistik penggunaan.</li>
+                         <li>Permintaan hapus data: achmad.taufik@jne.co.id.</li>
+                        </ul>
+                        </div>
                 </div>
             </div>
 
@@ -605,6 +617,7 @@
     </style>
 
     <!-- External JS Script -->
-    <script src="script.js?v=2.1"></script>
+    <script src="script.js?v=1.3"></script>
+    <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "59df581349c842f3875eaac74f4d74dd"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>

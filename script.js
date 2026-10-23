@@ -148,7 +148,19 @@ async function submitVerify() {
             : 'Verifikasi gagal. Coba lagi.';
     }
 }
-
+// Ganti akun (untuk pengguna JNE yang sebelumnya mendaftar dengan email lain)
+function switchAccount() {
+    const u = nadiGetUser();
+    const info = u ? 'Saat ini terdaftar sebagai ' + u.email + '. ' : '';
+    if (!confirm(info + 'Daftar ulang dengan email JNE (@jne.co.id) untuk membuka menu Data Splitter?')) return;
+    try { localStorage.removeItem('nadi_user'); } catch (e) {}
+    try { sessionStorage.removeItem('nadi_verify_skipped'); } catch (e) {}
+    const em = document.getElementById('register-email'); if (em) em.value = '';
+    const cs = document.getElementById('register-consent'); if (cs) cs.checked = false;
+    const er = document.getElementById('register-error'); if (er) er.innerText = '';
+    applyAccessControl();
+    showRegisterModal();
+}
 // Bersihkan input file setelah proses sukses (pengganti reload halaman)
 function resetAfterSuccess() {
     [['parquet-input-files', 'parquet-label'], ['split-files', 'split-label'], ['row-files', 'row-label'],

@@ -105,7 +105,8 @@ function showVerifyModal(autoSend) {
     const m = document.getElementById('verify-modal');
     if (!m) return;
     m.classList.remove('hidden'); m.classList.add('flex');
-    if (autoSend) sendOtp();
+        if (autoSend) sendOtp();
+    else { const vm = document.getElementById('verify-msg'); if (vm) vm.innerText = 'Klik "Kirim ulang" untuk meminta kode baru.'; }
 }
 function hideVerifyModal() {
     const m = document.getElementById('verify-modal');
@@ -315,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (REQUIRE_REGISTRATION && !u) {
         showRegisterModal();
     } else if (u && isJneEmail(u.email) && !u.verified && !sessionStorage.getItem('nadi_verify_skipped')) {
-        showVerifyModal(true);
+        showVerifyModal(false);
     }
 });
 
@@ -642,6 +643,7 @@ async function startSplit() {
     const unknownCodes = {};
     const warnings = [];
     const skippedFiles = [];
+    const perFile = [];
     const SEARCH_LIMIT = 200;
     let master = null, masterCoding = -1, totalRead = 0;
 
@@ -682,6 +684,7 @@ async function startSplit() {
             }
             buckets[cat].push(row);
             totalRead++;
+            st.count++;
         }
     };
 
@@ -689,8 +692,8 @@ async function startSplit() {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (progStatus) progStatus.innerText = `Membaca ${file.name} (${i + 1}/${files.length})...`;
-            const st = { headerDone: false, noHeader: false, aligner: null };
-            const lower = file.name.toLowerCase();
+              const st = { headerDone: false, noHeader: false, aligner: null, count: 0 };
+              const lower = file.name.toLowerCase();
 
             if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
                 const rows = await readExcelFile(file);
@@ -706,7 +709,7 @@ async function startSplit() {
                 });
             }
             if (!st.headerDone) skippedFiles.push(file.name);
-
+            perFile.push(file.name + ': ' + st.count.toLocaleString('id-ID') + ' baris');
             const pct = Math.round(((i + 1) / files.length) * 100);
             if (progBar) progBar.style.width = pct + '%';
             if (progPercent) progPercent.innerText = pct + '%';
@@ -734,8 +737,8 @@ async function startSplit() {
 
         let msg = `Total ${totalRead.toLocaleString('id-ID')} baris data dari ${files.length - skippedFiles.length} file.\n`
             + `CLOSED: ${counts.CLOSED.toLocaleString('id-ID')} | OPEN: ${counts.OPEN.toLocaleString('id-ID')} | CLAIM: ${counts.CLAIM.toLocaleString('id-ID')} | RETURN: ${counts.RETURN.toLocaleString('id-ID')}\n`
-            + `Rekonsiliasi: ${sumOut === totalRead ? 'COCOK ✔' : 'TIDAK COCOK ✖ (periksa data!)'}  |  Mapping v${MAPPING_VERSION}`;
-        const unknownList = Object.entries(unknownCodes).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([c, n]) => `${c} (${n})`).join(', ');
+            + `Baris per file (cocokkan dengan Excel): ${perFile.slice(0, 8).join('; ')}${perFile.length > 8 ? '; ...' : ''}  |  Mapping v${MAPPING_VERSION}`;
+              const unknownList = Object.entries(unknownCodes).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([c, n]) => `${c} (${n})`).join(', ');
         if (unknownList) msg += `\n⚠ Kode tidak dikenal (dimasukkan ke OPEN): ${unknownList}. Tambahkan ke mapping.json bila perlu.`;
         if (skippedFiles.length) msg += `\n⚠ Dilewati (tidak ada kolom CODING): ${skippedFiles.join(', ')}`;
         if (warnings.length) msg += `\n⚠ ` + warnings.slice(0, 5).join('\n⚠ ');
@@ -1247,7 +1250,7 @@ async function startCustomMapsScraper() {
         progStatus.innerText = "Selesai! File berhasil diunduh.";
         printLog("Proses selesai tanpa bantuan backend server!", "SYSTEM");
         trackUsage('maps', 1); 
-        showToast("Ekstraksi Maps Selesai!.", "success", true);
+        showToast("Ekstraksi Maps Selesai!", "success", true);
 
     } catch (error) {
         printLog(error.message, "ERROR");

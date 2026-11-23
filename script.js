@@ -514,7 +514,7 @@ async function startParquetProcess() {
             }
             registered.push(fileName);
 
-            const src = `read_csv('${fileName}', header=true, all_varchar=true)`;
+            const src = `read_csv('${fileName}', header=true, auto_detect=true, all_varchar=true, null_padding=true)`;
             const resHeaders = await conn.query(`DESCRIBE SELECT * FROM ${src}`);
             const actualCols = resHeaders.toArray().map(r => String(r.column_name).toUpperCase());
 

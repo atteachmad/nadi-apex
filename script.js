@@ -443,6 +443,202 @@ function toggleParquetMode() {
 }
 
 // ==========================================================
+// HELPER PARQUET: STREAMING (CSV & EXCEL ukuran berapapun)
+// ==========================================================
+const PQ_BATCH_ROWS = 50000;
+
+function pqSetProgress(pct, text) {
+    const bar = document.getElementById('parquet-progress-bar');
+    const st = document.getElementById('parquet-status');
+    const pc = document.getElementById('parquet-percent');
+    const p = Math.min(100, Math.max(0, pct));
+    if (bar) bar.style.width = p + '%';
+    if (pc) pc.innerText = Math.round(p) + '%';
+    if (st && text) st.innerText = text;
+}
+
+function pqCleanHeader(raw) {
+    const seen = {};
+    return raw.map((h, i) => {
+        let n = String(h ?? '').replace(/[\r\n]+/g, ' ').replace(/["']/g, '').trim();
+        if (!n) n = 'KOLOM_' + (i + 1);
+        const key = n.toUpperCase();
+        seen[key] = (seen[key] || 0) + 1;
+        return seen[key] > 1 ? n + '_' + seen[key] : n;
+    });
+}
+
+// Baca CSV per potongan 4 MB (tanpa batas ukuran file)
+function pqStreamCsv(file, onRows, onBytes) {
+    return new Promise((resolve, reject) => {
+        Papa.parse(file, {
+            skipEmptyLines: 'greedy',
+            chunkSize: 1024 * 1024 * 4,
+            chunk: async (results, parser) => {
+                parser.pause();
+                try {
+                    await onRows(results.data);
+                    onBytes(results.meta.cursor || 0);
+                    parser.resume();
+                } catch (e) { parser.abort(); reject(e); }
+            },
+            complete: () => resolve(),
+            error: (err) => reject(err)
+        });
+    });
+}
+
+// Baca Excel di Web Worker (halaman tidak freeze), kirim per PQ_BATCH_ROWS baris
+function pqStreamXlsx(file, onRows, onProgress) {
+    const workerSrc = `
+        importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        let ws, r1, c0, c1, cur;
+        onmessage = (e) => {
+            const m = e.data;
+            try {
+                if (m.cmd === 'load') {
+                    const wb = XLSX.read(new Uint8Array(m.buf), { type: 'array', dense: true, sheets: 0, cellDates: false });
+                    ws = wb.Sheets[wb.SheetNames[0]];
+                    if (!ws || !ws['!ref']) { postMessage({ type: 'done' }); return; }
+                    const rg = XLSX.utils.decode_range(ws['!ref']);
+                    cur = rg.s.r; r1 = rg.e.r; c0 = rg.s.c; c1 = rg.e.c;
+                    postMessage({ type: 'ready', totalRows: r1 - rg.s.r + 1, startRow: rg.s.r });
+                } else if (m.cmd === 'next') {
+                    if (cur > r1) { postMessage({ type: 'done' }); return; }
+                    const end = Math.min(cur + m.size - 1, r1);
+                    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false, blankrows: false, range: { s: { r: cur, c: c0 }, e: { r: end, c: c1 } } });
+                    postMessage({ type: 'rows', rows: rows, doneRows: end - m.startRow + 1 });
+                    cur = end + 1;
+                }
+            } catch (err) { postMessage({ type: 'error', message: String((err && err.message) || err) }); }
+        };
+    `;
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }));
+        const worker = new Worker(url);
+        let total = 1, startRow = 0, finished = false;
+        const finish = (err) => {
+            if (finished) return;
+            finished = true;
+            try { worker.terminate(); } catch (_) {}
+            URL.revokeObjectURL(url);
+            if (err) reject(err); else resolve();
+        };
+        worker.onmessage = async (e) => {
+            const m = e.data;
+            try {
+                if (m.type === 'ready') {
+                    total = Math.max(m.totalRows, 1); startRow = m.startRow;
+                    worker.postMessage({ cmd: 'next', size: PQ_BATCH_ROWS, startRow });
+                } else if (m.type === 'rows') {
+                    await onRows(m.rows);
+                    onProgress(m.doneRows, total);
+                    worker.postMessage({ cmd: 'next', size: PQ_BATCH_ROWS, startRow });
+                } else if (m.type === 'done') finish();
+                else if (m.type === 'error') finish(new Error(m.message));
+            } catch (err) { finish(err); }
+        };
+        worker.onerror = () => finish(new Error('Gagal membaca file Excel (kemungkinan memori browser tidak cukup). Simpan file sebagai CSV lalu coba lagi.'));
+        file.arrayBuffer()
+            .then(buf => worker.postMessage({ cmd: 'load', buf }, [buf]))
+            .catch(finish);
+    });
+}
+
+// Siapkan tabel: buat baru, atau tambah kolom yang belum ada
+async function pqPrepareTable(ctx, names) {
+    const q = n => '"' + String(n).replace(/"/g, '""') + '"';
+    if (!ctx.tableReady) {
+        await ctx.conn.query(`CREATE TABLE master_table (${names.map(n => q(n) + ' VARCHAR').join(', ')})`);
+        ctx.tableReady = true;
+        return;
+    }
+    const d = await ctx.conn.query(`DESCRIBE master_table`);
+    const have = new Set(d.toArray().map(r => String(r.column_name).toUpperCase()));
+    for (const n of names) {
+        if (!have.has(n.toUpperCase())) {
+            await ctx.conn.query(`ALTER TABLE master_table ADD COLUMN ${q(n)} VARCHAR`);
+            have.add(n.toUpperCase());
+        }
+    }
+}
+
+// Proses 1 file (CSV / XLSX / XLS) ke master_table
+async function pqProcessFile(ctx, file, idx, total) {
+    const isExcel = /\.(xlsx|xls|xlsm)$/i.test(file.name);
+    const label = `File ${idx + 1}/${total}: ${file.name}`;
+    const t0 = Date.now();
+    const q = n => '"' + String(n).replace(/"/g, '""') + '"';
+    let header = null, keepIdx = [], keptNames = [], fileRows = 0, gotData = false, ticker = null;
+
+    const report = (frac, info) => {
+        const pct = 30 + ((idx + Math.min(Math.max(frac, 0), 1)) / total) * 55;
+        const sec = Math.round((Date.now() - t0) / 1000);
+        pqSetProgress(pct, `${label} | ${info} | ${sec} dtk`);
+    };
+
+    const onRows = async (rowsIn) => {
+        let rows = rowsIn;
+        if (!header) {
+            const h = rows.findIndex(r => Array.isArray(r) && r.some(c => String(c ?? '').trim() !== ''));
+            if (h === -1) return;
+            header = pqCleanHeader(rows[h]);
+            rows = rows.slice(h + 1);
+            const up = header.map(x => x.toUpperCase());
+            const listed = i => ctx.customCols.includes(up[i]);
+            keepIdx = header.map((_, i) => i).filter(i =>
+                ctx.customCols.length === 0 ? true : (ctx.colMode === 'keep' ? listed(i) : !listed(i)));
+            if (keepIdx.length === 0) throw new Error(`Tidak ada kolom yang cocok di file ${file.name}.\nKolom tersedia: ${header.join(', ')}`);
+            keptNames = keepIdx.map(i => header[i]);
+            await pqPrepareTable(ctx, keptNames);
+        }
+        const data = [];
+        for (const r of rows) {
+            if (!Array.isArray(r)) continue;
+            const out = keepIdx.map(i => String(r[i] ?? ''));
+            if (out.every(v => v === '')) continue;
+            data.push(out);
+        }
+        if (data.length === 0) return;
+
+        const csv = Papa.unparse([keptNames, ...data], { newline: '\n' });
+        const fname = `pq_chunk_${ctx.batchNo++}.csv`;
+        await ctx.db.registerFileText(fname, csv);
+        const colList = keptNames.map(q).join(', ');
+        const colDef = keptNames.map(n => `'${String(n).replace(/'/g, "''")}': 'VARCHAR'`).join(', ');
+        try {
+            await ctx.conn.query(
+                `INSERT INTO master_table (${colList}) SELECT ${colList} FROM read_csv('${fname}', ` +
+                `header=true, auto_detect=false, delim=',', quote='"', escape='"', ` +
+                `null_padding=true, ignore_errors=true, columns={${colDef}})`);
+        } finally {
+            try { await ctx.db.dropFile(fname); } catch (_) {}
+        }
+        fileRows += data.length; ctx.rows += data.length; gotData = true;
+        await delay(0); // beri kesempatan browser menggambar ulang progres
+    };
+
+    try {
+        if (isExcel) {
+            report(0, 'Membaca & menguraikan Excel di latar belakang');
+            ticker = setInterval(() => { if (!gotData) report(0, 'Membaca & menguraikan Excel (jangan tutup halaman)'); }, 1000);
+            await pqStreamXlsx(file, onRows, (done, tot) =>
+                report(done / tot, `${fileRows.toLocaleString('id-ID')} baris masuk (${Math.round(done / tot * 100)}% file)`));
+        } else {
+            report(0, 'Membaca CSV');
+            await pqStreamCsv(file, onRows, (cur) =>
+                report(cur / Math.max(file.size, 1), `${fileRows.toLocaleString('id-ID')} baris masuk`));
+        }
+    } catch (e) {
+        throw new Error(`File "${file.name}": ${e.message}`);
+    } finally {
+        if (ticker) clearInterval(ticker);
+    }
+    if (!header) throw new Error(`File "${file.name}" kosong atau tidak punya baris header.`);
+    report(1, `selesai, ${fileRows.toLocaleString('id-ID')} baris`);
+}
+
+// ==========================================================
 // PARQUET INJECTOR LOGIC
 // ==========================================================
 async function startParquetProcess() {
@@ -485,64 +681,9 @@ async function startParquetProcess() {
             tableReady = true;
         }
 
+        const ctx = { db, conn, tableReady, customCols, colMode, rows: 0, batchNo: 0 };
         for (let i = 0; i < inputFiles.length; i++) {
-            const file = inputFiles[i];
-            const fileName = `input_${i}.csv`;
-            const lower = file.name.toLowerCase();
-            progStatus.innerText = `Memproses File: ${file.name} (${i + 1}/${inputFiles.length})...`;
-
-            if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
-                const csvStr = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onerror = () => reject(new Error('Gagal membaca ' + file.name));
-                    reader.onload = (e) => {
-                        try {
-                            const data = new Uint8Array(e.target.result);
-                            const workbook = XLSX.read(data, { type: 'array', cellDates: false, raw: false });
-                            const matrix = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '', raw: false });
-                            for (let r = 0; r < matrix.length; r++)
-                                for (let c = 0; c < matrix[r].length; c++)
-                                    matrix[r][c] = String(matrix[r][c]).replace(/\n/g, ' ').trim();
-                            resolve(Papa.unparse(matrix));
-                        } catch (err) { reject(err); }
-                    };
-                    reader.readAsArrayBuffer(file);
-                });
-                await db.registerFileText(fileName, csvStr);
-            } else {
-                await db.registerFileHandle(fileName, file, duckdbLib.DuckDBDataProtocol.BROWSER_FILEREADER, true);
-            }
-            registered.push(fileName);
-
-            const src = `read_csv('${fileName}', header=true, auto_detect=true, all_varchar=true, null_padding=true)`;
-            const resHeaders = await conn.query(`DESCRIBE SELECT * FROM ${src}`);
-            const actualCols = resHeaders.toArray().map(r => String(r.column_name).toUpperCase());
-
-            let selectQuery = "*";
-            if (customCols.length > 0) {
-                let validCols = [];
-                if (colMode === 'keep') {
-                    validCols = customCols.filter(c => actualCols.includes(c));
-                    if (validCols.length === 0) throw new Error(`Kolom instruksi Anda (${customCols.join(', ')}) TIDAK DITEMUKAN di file ${file.name}.\nKolom yang tersedia: ${actualCols.join(', ')}`);
-                } else {
-                    validCols = actualCols.filter(c => !customCols.includes(c));
-                    if (validCols.length === 0) throw new Error(`Semua kolom di ${file.name} akan terbuang. Periksa daftar kolom yang dibuang.`);
-                }
-                selectQuery = validCols.map(c => `"${c}"`).join(", ");
-            }
-
-            if (!tableReady) {
-                await conn.query(`CREATE TABLE master_table AS SELECT ${selectQuery} FROM ${src}`);
-                tableReady = true;
-            } else {
-                try {
-                    await conn.query(`INSERT INTO master_table BY NAME SELECT ${selectQuery} FROM ${src}`);
-                } catch (err) {
-                    throw new Error(`File "${file.name}" tidak cocok dengan struktur master (nama kolom berbeda / ada kolom baru / tipe tidak cocok).\nDetail: ${err.message}`);
-                }
-            }
-            try { await db.dropFile(fileName); } catch (_) {}
-            progBar.style.width = (30 + Math.round(((i + 1) / inputFiles.length) * 45)) + '%';
+            await pqProcessFile(ctx, inputFiles[i], i, inputFiles.length);
         }
 
         progStatus.innerText = "Mengompilasi data ke format asli .parquet...";
@@ -550,7 +691,11 @@ async function startParquetProcess() {
         const cnt = await conn.query(`SELECT COUNT(*) AS n FROM master_table`);
         const totalRows = Number(cnt.toArray()[0].n);
 
+        progStatus.innerText = "Menulis file parquet (" + totalRows.toLocaleString('id-ID') + " baris)...";
+        await conn.query(`SET preserve_insertion_order=false`);
+
         await conn.query(`COPY master_table TO 'output.parquet' (FORMAT PARQUET)`);
+        await conn.query(`DROP TABLE IF EXISTS master_table`); // bebaskan memori sebelum file diunduh
         const buffer = await db.copyFileToBuffer('output.parquet');
         const blob = new Blob([buffer], { type: 'application/octet-stream' });
         downloadBlob(blob, mode === 'create' ? "Nadi_Master_Data.parquet" : "Nadi_Master_Updated.parquet");

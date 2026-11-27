@@ -1206,6 +1206,9 @@ async function startApexUpload() {
     const colName = normHeader(document.getElementById('apex-col').value);
     const dash = document.getElementById('apex-dash').value;
     const monitor = document.getElementById('apex-monitor').checked;
+    let limit = parseInt(document.getElementById('row-limit').value);
+    if (isNaN(limit) || limit < 1) limit = APEX_MAX_ROWS;
+    limit = Math.min(limit, APEX_MAX_ROWS); // batas dashboard APEX = 20.000
     if (!colName) return showToast('Isi nama kolom yang dipertahankan.', 'error');
 
     const apexUser = document.getElementById('apex-user').value.trim();
@@ -1231,17 +1234,32 @@ async function startApexUpload() {
             const values = await apexReadColumn(files[i], colName);
             apexLog(`${files[i].name}: ${values.length.toLocaleString('id-ID')} baris.`, 'INFO');
             const stem = files[i].name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 40) || 'file';
-            for (let s = 0, n = 1; s < values.length; s += APEX_MAX_ROWS, n++) {
-                const chunk = values.slice(s, s + APEX_MAX_ROWS);
+            for (let s = 0, n = 1; s < values.length; s += limit, n++) {
+                const chunk = values.slice(s, s + limit);
                 parts.push({ name: `AWB_${stem}${files.length > 1 ? '_' + (i + 1) : ''}_${stamp}_Part${n}.csv`, text: chunk.join('\r\n') + '\r\n', rows: chunk.length });
             }
         }
         if (parts.length === 0) throw new Error('Tidak ada data untuk diupload.');
-        apexLog(`Terbentuk ${parts.length} file (maks ${APEX_MAX_ROWS.toLocaleString('id-ID')} baris/file).`, 'SUCCESS');
+                apexLog(`Terbentuk ${parts.length} file (maks ${limit.toLocaleString('id-ID')} baris/file, tanpa header).`, 'SUCCESS');
 
         // 2. Unduh file hasil potongan
         apexSetProgress(8, 'Mengunduh file hasil potongan...');
-        for (const p of parts) { apexDownloadText(p.name, p.text); await delay(400); }
+                if (parts.length === 1) {
+            apexDownloadText(parts[0].name, parts[0].text);
+        } else if (typeof JSZip !== 'undefined') {
+            const zip = new JSZip();
+            parts.forEach(p => zip.file(p.name, p.text));
+            downloadBlob(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), `Nadi_APEX_Split_${stamp}.zip`);
+        } else {
+                if (parts.length === 1) {
+            apexDownloadText(parts[0].name, parts[0].text);
+        } else if (typeof JSZip !== 'undefined') {
+            const zip = new JSZip();
+            parts.forEach(p => zip.file(p.name, p.text));
+            downloadBlob(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), `Nadi_APEX_Split_${stamp}.zip`);
+        } else {
+            for (const p of parts) { apexDownloadText(p.name, p.text); await delay(700); }
+        }
         apexLog('File hasil potongan diunduh ke folder Downloads.', 'SUCCESS');
 
         // 3. Kirim ke ekstensi

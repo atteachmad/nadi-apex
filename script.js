@@ -1244,14 +1244,7 @@ async function startApexUpload() {
 
         // 2. Unduh file hasil potongan
         apexSetProgress(8, 'Mengunduh file hasil potongan...');
-                if (parts.length === 1) {
-            apexDownloadText(parts[0].name, parts[0].text);
-        } else if (typeof JSZip !== 'undefined') {
-            const zip = new JSZip();
-            parts.forEach(p => zip.file(p.name, p.text));
-            downloadBlob(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), `Nadi_APEX_Split_${stamp}.zip`);
-        } else {
-                if (parts.length === 1) {
+        if (parts.length === 1) {
             apexDownloadText(parts[0].name, parts[0].text);
         } else if (typeof JSZip !== 'undefined') {
             const zip = new JSZip();

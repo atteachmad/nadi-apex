@@ -85,6 +85,9 @@ function applyAccessControl() {
     if (btn) btn.style.display = ok ? '' : 'none';
     const about = document.getElementById('about-splitter');
     if (about) about.style.display = ok ? '' : 'none';
+    const apexPanel = document.getElementById('apex-panel');
+    if (apexPanel) apexPanel.style.display = ok ? '' : 'none';
+    if (ok) { checkApexExt(); if (!window._apexExtTimer) window._apexExtTimer = setInterval(checkApexExt, 5000); }
     if (!ok && sessionStorage.getItem('nadi_active_tab') === 'splitter') switchTab('parquet');
 }
 
@@ -1098,6 +1101,196 @@ async function startRowSplit() {
         showToast('Error: ' + e.message, 'error');
     } finally {
         btn.disabled = false; btn.classList.remove('opacity-50');
+    }
+}
+
+// ==================
+// UPLOAD AWB KE APEX 
+// ==================
+const APEX_MAX_ROWS = 20000;
+
+function apexLog(text, type = 'INFO') {
+    const box = document.getElementById('apex-log');
+    if (!box) return;
+    const color = type === 'ERROR' ? 'text-red-500' : type === 'WARN' ? 'text-yellow-400'
+        : type === 'SYSTEM' ? 'text-blue-400' : type === 'SUCCESS' ? 'text-green-500' : 'text-gray-300';
+    const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+    box.innerHTML += `<div><span class="text-gray-500">[${time}]</span> <span class="${color} font-bold">[${type}]</span> ${escapeHtml(text)}</div>`;
+    box.scrollTop = box.scrollHeight;
+}
+
+function apexSetProgress(pct, text) {
+    const p = Math.min(100, Math.max(0, pct));
+    document.getElementById('apex-bar').style.width = p + '%';
+    document.getElementById('apex-percent').innerText = Math.round(p) + '%';
+    if (text) document.getElementById('apex-status').innerText = text;
+}
+
+// Ambil 1 kolom (berdasarkan nama header), baris setelah header, tanpa header
+async function apexReadColumn(file, colName) {
+    const values = [];
+    const st = { idx: -1, searched: false };
+    const handle = (rows) => {
+        let start = 0;
+        if (st.idx === -1) {
+            if (st.searched) return;
+            st.searched = true;
+            for (let r = 0; r < Math.min(rows.length, 200); r++) {
+                if (!Array.isArray(rows[r])) continue;
+                const k = rows[r].findIndex(c => normHeader(c) === colName);
+                if (k !== -1) { st.idx = k; start = r + 1; break; }
+            }
+            if (st.idx === -1) return;
+        }
+        for (let r = start; r < rows.length; r++) {
+            const v = String((rows[r] && rows[r][st.idx]) ?? '').replace(/[\r\n]+/g, ' ').trim();
+            if (v) values.push(v);
+        }
+    };
+    if (/\.(xlsx|xls)$/i.test(file.name)) {
+        handle(await readExcelFile(file) || []);
+    } else {
+        await new Promise(resolve => Papa.parse(file, {
+            chunkSize: 1024 * 1024 * 5, chunk: r => handle(r.data), complete: resolve, error: resolve
+        }));
+    }
+    if (st.idx === -1) throw new Error(`Kolom "${colName}" tidak ditemukan di ${file.name} (dicari di 200 baris pertama).`);
+    return values;
+}
+
+// ===== Komunikasi dengan ekstensi Chrome NadiX APEX Uploader =====
+function apexExt(cmd, payload, timeout = 4000) {
+    return new Promise((resolve, reject) => {
+        const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+        const onMsg = (e) => {
+            if (e.source !== window || !e.data || e.data.source !== 'nadix-ext' || e.data.id !== id) return;
+            clearTimeout(timer);
+            window.removeEventListener('message', onMsg);
+            resolve(e.data.result || { ok: false, error: 'kosong' });
+        };
+        const timer = setTimeout(() => {
+            window.removeEventListener('message', onMsg);
+            reject(new Error('EXT_NOT_FOUND'));
+        }, timeout);
+        window.addEventListener('message', onMsg);
+        window.postMessage({ source: 'nadix-page', id, cmd, payload }, '*');
+    });
+}
+
+async function checkApexExt() {
+    const el = document.getElementById('apex-helper-status');
+    if (!el) return;
+    try {
+        const r = await apexExt('ping', {}, 1500);
+        el.innerText = r && r.ok ? '✅ Ekstensi terhubung (v' + r.version + ')' : '⚠️ Ekstensi tidak merespons';
+        el.style.color = r && r.ok ? '#16a34a' : '#d97706';
+    } catch (e) {
+        el.innerText = '❌ Ekstensi belum terpasang / Chrome-Edge belum memuatnya (lihat cara pasang)';
+        el.style.color = '#dc2626';
+    }
+}
+
+function apexDownloadText(name, text) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function startApexUpload() {
+    if (!isJneVerified()) return showToast('Fitur ini khusus akun JNE yang sudah terverifikasi.', 'error');
+    const files = document.getElementById('row-files').files;
+    if (files.length === 0) return showToast('Pilih file dulu di kotak "Pilih / Tarik File" di atas!', 'error');
+
+    const colName = normHeader(document.getElementById('apex-col').value);
+    const dash = document.getElementById('apex-dash').value;
+    const monitor = document.getElementById('apex-monitor').checked;
+    if (!colName) return showToast('Isi nama kolom yang dipertahankan.', 'error');
+
+    const apexUser = document.getElementById('apex-user').value.trim();
+    const apexPass = document.getElementById('apex-pass').value;
+    const btn = document.getElementById('apex-btn');
+    const box = document.getElementById('apex-progress');
+    document.getElementById('apex-log').innerHTML = '';
+    box.classList.remove('hidden');
+    btn.disabled = true;
+
+    try {
+        // 0. Pastikan ekstensi ada
+        apexSetProgress(0, 'Memeriksa ekstensi...');
+        try { await apexExt('ping', {}, 1500); }
+        catch (e) { throw new Error('Ekstensi NadiX APEX Uploader belum terpasang. Buka "Cara pasang" di panel ini.'); }
+
+        // 1. Baca kolom & potong
+        const stamp = Date.now().toString(36);
+        const parts = []; // {name, text, rows}
+        for (let i = 0; i < files.length; i++) {
+            apexLog(`Membaca kolom "${colName}" dari ${files[i].name} ...`, 'SYSTEM');
+            apexSetProgress(2, `Membaca ${files[i].name} (${i + 1}/${files.length})`);
+            const values = await apexReadColumn(files[i], colName);
+            apexLog(`${files[i].name}: ${values.length.toLocaleString('id-ID')} baris.`, 'INFO');
+            const stem = files[i].name.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 40) || 'file';
+            for (let s = 0, n = 1; s < values.length; s += APEX_MAX_ROWS, n++) {
+                const chunk = values.slice(s, s + APEX_MAX_ROWS);
+                parts.push({ name: `AWB_${stem}${files.length > 1 ? '_' + (i + 1) : ''}_${stamp}_Part${n}.csv`, text: chunk.join('\r\n') + '\r\n', rows: chunk.length });
+            }
+        }
+        if (parts.length === 0) throw new Error('Tidak ada data untuk diupload.');
+        apexLog(`Terbentuk ${parts.length} file (maks ${APEX_MAX_ROWS.toLocaleString('id-ID')} baris/file).`, 'SUCCESS');
+
+        // 2. Unduh file hasil potongan
+        apexSetProgress(8, 'Mengunduh file hasil potongan...');
+        for (const p of parts) { apexDownloadText(p.name, p.text); await delay(400); }
+        apexLog('File hasil potongan diunduh ke folder Downloads.', 'SUCCESS');
+
+        // 3. Kirim ke ekstensi
+        apexSetProgress(12, 'Mengirim file ke ekstensi...');
+        let r = await apexExt('reset', {}, 8000);
+        if (!r.ok) throw new Error(r.error === 'busy' ? 'Masih ada proses upload yang berjalan. Selesaikan/batalkan dulu.' : 'Gagal menyiapkan ekstensi: ' + r.error);
+        for (const p of parts) {
+            r = await apexExt('addFile', { name: p.name, text: p.text }, 30000);
+            if (!r.ok) throw new Error('Gagal mengirim ' + p.name + ' ke ekstensi: ' + r.error);
+        }
+        r = await apexExt('start', { dash, monitor, user: apexUser, pass: apexPass }, 10000);
+        document.getElementById('apex-pass').value = '';
+        if (!r.ok) throw new Error('Gagal memulai: ' + r.error);
+                apexLog(`Login & upload ke ${dash.toUpperCase()} berjalan di latar belakang...`, 'SYSTEM');
+        showToast('Proses APEX berjalan di latar belakang. Pantau di panel.', 'info');
+
+        // 4. Pantau progres
+        let since = 0;
+        const W = monitor ? { pending: 0, submitting: .25, uploaded: .5, downloaded: 1, error: 1 }
+                          : { pending: 0, submitting: .25, uploaded: 1, downloaded: 1, error: 1 };
+        const phaseTxt = { login: 'Login ke APEX', upload: 'Mengupload file ke APEX', monitor: 'Memantau hasil di APEX' };
+        for (;;) {
+            await delay(2000);
+            let s;
+            try { s = await apexExt('status', { since }, 5000); } catch (e) { continue; }
+            if (!s || !s.ok) continue;
+            (s.logs || []).forEach(l => apexLog(l.msg, l.level));
+            since = s.seq || since;
+            const tot = s.files.length || 1;
+            const done = s.files.reduce((a, f) => a + (W[f.st] ?? 0), 0);
+            apexSetProgress(15 + (done / tot) * 85, `${phaseTxt[s.phase] || 'Berjalan'} (${Math.floor(done)}/${tot})`);
+            if (['done', 'error', 'cancelled'].includes(s.state)) {
+                const bad = s.files.filter(f => f.st === 'error').length;
+                if (s.state === 'done') {
+                    apexSetProgress(100, bad ? `Selesai dengan ${bad} file error` : 'Selesai');
+                    showToast(monitor ? 'Selesai. Hasil APEX ada di Downloads\\NadiX-APEX.' : 'Semua file berhasil diupload ke APEX.', bad ? 'error' : 'success');
+                } else {
+                    apexSetProgress(100, s.state === 'error' ? 'Berhenti karena error' : 'Dibatalkan');
+                    showToast('Proses APEX ' + (s.state === 'error' ? 'gagal, lihat log.' : 'dibatalkan.'), 'error');
+                }
+                break;
+            }
+        }
+        try { trackUsage('apex', parts.length); } catch (e) {}
+    } catch (e) {
+        apexLog(e.message, 'ERROR');
+        showToast(e.message, 'error');
+    } finally {
+        btn.disabled = false;
     }
 }
 

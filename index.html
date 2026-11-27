@@ -306,6 +306,55 @@
                             <div id="row-progress-bar" class="bg-blue-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
                         </div>
                     </div>
+                                        <!-- PANEL UPLOAD APEX (khusus akun JNE terverifikasi) -->
+                    <div id="apex-panel" class="hidden mt-6 p-4 border border-blue-200 rounded-xl bg-blue-50">
+  <h3 class="font-bold text-blue-800 mb-1">🚀 Upload Otomatis ke Dashboard APEX (khusus JNE)</h3>
+  <p class="text-xs text-gray-600 mb-3">Kolom dipertahankan tanpa header, dipotong maks 20.000 baris/file, lalu diupload otomatis lewat ekstensi Chrome.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+    <div>
+      <label class="text-xs font-bold text-gray-600">Dashboard</label>
+      <select id="apex-dash" class="w-full p-2 border rounded">
+        <option value="ccc1">CCC1 (dash-ccc01)</option>
+        <option value="ccc2">CCC2 (dash-ccc02)</option>
+        <option value="ccc3">CCC3 (dash-ccc03)</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs font-bold text-gray-600">Nama kolom yang dipertahankan</label>
+      <input id="apex-col" type="text" value="AWB" class="w-full p-2 border rounded">
+    </div>
+    <label class="flex items-end gap-2 text-sm pb-2">
+      <input id="apex-monitor" type="checkbox" checked> Pantau &amp; unduh hasil dari APEX
+    </label>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+    <input id="apex-user" type="text" autocomplete="off" placeholder="User APEX (opsional, untuk login otomatis)" class="p-2 border rounded">
+    <input id="apex-pass" type="password" autocomplete="new-password" placeholder="Password APEX" class="p-2 border rounded">
+  </div>
+  <div class="mb-3 text-sm">
+    Status ekstensi: <span id="apex-helper-status" class="font-bold text-gray-500">memeriksa...</span>
+  </div>
+
+  <details class="mb-3 text-xs text-gray-700">
+    <summary class="cursor-pointer font-bold text-blue-700">Belum terpasang? Cara pasang (sekali saja)</summary>
+    <div style="margin-top:6px;line-height:1.6">
+      <a href="nadix-extension.zip" download class="text-blue-600 underline font-bold">⬇ Unduh nadix-extension.zip</a><br>
+      1. Ekstrak ke folder tetap, mis. <code>C:\NadiX-Extension</code>.<br>
+      2. Buka <code>chrome://extensions</code> (atau <code>edge://extensions</code>).<br>
+      3. Aktifkan <b>Developer mode</b>, klik <b>Load unpacked</b>, pilih folder tadi.<br>
+      4. Muat ulang halaman NadiX-Bot. Status harus hijau.
+    </div>
+  </details>
+
+  <button id="apex-btn" onclick="startApexUpload()" class="px-4 py-2 bg-blue-600 text-white rounded font-bold">Split &amp; Upload ke APEX</button>
+
+  <div id="apex-progress" class="hidden mt-4">
+    <div class="flex justify-between text-sm mb-1"><span id="apex-status">Menunggu...</span><span id="apex-percent">0%</span></div>
+    <div class="w-full bg-gray-200 rounded h-2"><div id="apex-bar" class="bg-blue-600 h-2 rounded" style="width:0%"></div></div>
+    <div id="apex-log" class="mt-3 p-3 bg-gray-900 text-xs font-mono rounded overflow-y-auto" style="max-height:220px"></div>
+  </div>
+</div>
                 </div>
             </div>
 
@@ -620,7 +669,7 @@
     </style>
 
     <!-- External JS Script -->
-    <script src="script.js?v=1.7"></script>
+    <script src="script.js?v=2.1"></script>
     <!-- Cloudflare Web Analytics --><script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "59df581349c842f3875eaac74f4d74dd"}'></script><!-- End Cloudflare Web Analytics -->
 </body>
 </html>
